@@ -1,0 +1,671 @@
+.gameContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: $primary-bg;
+}
+
+.main {
+  flex: 1;
+  display: flex;
+  padding: 20px;
+  gap: 20px;
+  overflow: hidden;
+
+  @media (max-width: 1200px) {
+    flex-direction: column;
+  }
+}
+
+.leftSection {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+
+  @media (max-width: 1200px) {
+    flex-direction: column;
+  }
+}
+
+.commandSection {
+  width: 260px;
+  background: white;
+  border-radius: $border-radius-large;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+
+  @media (max-width: 1200px) {
+    width: 100%;
+  }
+}
+
+.programSection {
+  flex: 1;
+  background: white;
+  border-radius: $border-radius-large;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  overflow: hidden;
+}
+
+.previewSection {
+  flex: 1;
+  background: white;
+  border-radius: $border-radius-large;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  padding: 20px;
+  overflow: hidden;
+
+  h3 {
+    margin-bottom: 20px;
+    color: $highlight-success;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+}
+
+.levelEditorMode {
+  flex-direction: column;
+}
+
+.programEditor {
+  height: 100%;
+  h3 {
+    margin-bottom: 15px;
+    color: $highlight-success;
+    font-weight: 700;
+  }
+}
+
+.editorHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+
+  h3 {
+    margin: 0;
+  }
+}
+
+.levelInfo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.levelName {
+  font-size: 16px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.levelBadge {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 3px 10px;
+  background-color: rgba($highlight-success, 0.1);
+  color: $highlight-success;
+  border-radius: 12px;
+}
+
+.editorButtons {
+  display: flex;
+  gap: 8px;
+}
+
+.actionButton,
+.programManagerButton {
+  padding: 6px 12px;
+  background-color: rgba($text-secondary, 0.08);
+  border: none;
+  border-radius: $border-radius-base;
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-primary;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover:not(:disabled) {
+    background-color: rgba($text-secondary, 0.15);
+    transform: translateY(-1px);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  &.active {
+    background-color: $turn-command;
+    color: white;
+  }
+
+  &.runButton {
+    background-color: $highlight-success;
+    color: white;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+
+    &:hover:not(:disabled) {
+      background-color: darken($highlight-success, 5%);
+    }
+  }
+
+  &.clearButton {
+    &:hover:not(:disabled) {
+      background-color: $error-light;
+      color: white;
+    }
+
+    &:active:not(:disabled) {
+      background-color: $warning-error;
+    }
+  }
+}
+
+.programManagerButton {
+  background-color: $turn-command;
+  color: white;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+
+  &:hover:not(:disabled) {
+    background-color: $turn-dark;
+  }
+
+  &:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+  }
+}
+
+.levelNav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding: 10px;
+  background-color: rgba($text-secondary, 0.03);
+  border-radius: $border-radius-base;
+  gap: 10px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.navButton {
+  padding: 8px 16px;
+  background: linear-gradient(135deg, $secondary-btn 0%, darken($secondary-btn, 8%) 100%);
+  color: white;
+  border: none;
+  border-radius: $border-radius-base;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.1),
+    0 4px 12px rgba(0, 0, 0, 0.08);
+  min-width: 90px;
+
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow:
+      0 5px 0 rgba(0, 0, 0, 0.1),
+      0 8px 20px rgba(0, 0, 0, 0.12);
+  }
+
+  &:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow:
+      0 1px 0 rgba(0, 0, 0, 0.1),
+      0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  &:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background: linear-gradient(135deg, #ccc 0%, #aaa 100%);
+    box-shadow: none;
+  }
+
+  &.saveButton {
+    background: linear-gradient(135deg, $highlight-success 0%, darken($highlight-success, 8%) 100%);
+    box-shadow:
+      0 3px 0 rgba(67, 160, 71, 0.3),
+      0 4px 12px rgba(111, 207, 151, 0.3);
+
+    &:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow:
+        0 5px 0 rgba(67, 160, 71, 0.3),
+        0 8px 20px rgba(111, 207, 151, 0.4);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(1px);
+      box-shadow:
+        0 1px 0 rgba(67, 160, 71, 0.3),
+        0 2px 8px rgba(111, 207, 151, 0.2);
+    }
+  }
+
+  &.loadButton {
+    background: linear-gradient(135deg, $turn-command 0%, darken($turn-command, 8%) 100%);
+    box-shadow:
+      0 3px 0 rgba(255, 152, 0, 0.3),
+      0 4px 12px rgba(244, 162, 97, 0.3);
+
+    &:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow:
+        0 5px 0 rgba(255, 152, 0, 0.3),
+        0 8px 20px rgba(244, 162, 97, 0.4);
+    }
+
+    &:active:not(:disabled) {
+      transform: translateY(1px);
+      box-shadow:
+        0 1px 0 rgba(255, 152, 0, 0.3),
+        0 2px 8px rgba(244, 162, 97, 0.2);
+    }
+  }
+}
+
+.levelTitle {
+  font-size: 16px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.commandsContainerWrapper {
+  height: calc(100vh - 230px);
+  overflow: hidden;
+}
+
+.debugControls {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: rgba($text-secondary, 0.03);
+  border-radius: $border-radius-base;
+
+  h4 {
+    margin-bottom: 10px;
+    color: $highlight-success;
+    font-weight: 700;
+  }
+}
+
+.debugButtons {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+
+  button {
+    flex: 1;
+    min-width: 100px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: $border-radius-base;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+
+    &:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+  }
+}
+
+.startButton {
+  background-color: $highlight-success;
+  color: white;
+}
+
+.stepButton {
+  background-color: $loop-command;
+  color: white;
+}
+
+.continueButton {
+  background-color: $primary-btn;
+  color: white;
+}
+
+.stopButton {
+  background-color: $warning-error;
+  color: white;
+}
+
+.debugSpeedControl {
+  margin-top: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  label {
+    font-weight: 600;
+  }
+
+  input[type="range"] {
+    flex: 1;
+  }
+}
+
+.speedSlider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba($text-secondary, 0.2);
+  outline: none;
+  cursor: pointer;
+
+  &::-webkit-slider-thumb {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: $highlight-success;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+}
+
+.debugInfo {
+  margin-top: 20px;
+  padding: 15px;
+  background-color: rgba($text-secondary, 0.03);
+  border-radius: $border-radius-base;
+
+  h4 {
+    margin-bottom: 10px;
+    color: $highlight-success;
+    font-weight: 700;
+  }
+}
+
+.debugStats {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  div {
+    font-size: 14px;
+    padding: 5px;
+    background-color: rgba($text-secondary, 0.05);
+    border-radius: 6px;
+  }
+}
+
+.demoPromptOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.demoPrompt {
+  background-color: white;
+  border-radius: $border-radius-large;
+  padding: 25px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+
+  h4 {
+    margin: 0 0 15px 0;
+    color: $highlight-success;
+    font-weight: 700;
+  }
+
+  p {
+    margin: 10px 0;
+    color: $text-secondary;
+  }
+  .loadButton {
+    flex: 1;
+    padding: 10px 15px;
+    background-color: rgba($text-secondary, 0.08);
+    border: none;
+    border-radius: $border-radius-base;
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-primary;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+
+    &:hover {
+      background-color: $highlight-success;
+      color: white;
+    }
+  }
+
+  .deleteButton {
+    padding: 8px 12px;
+    background-color: transparent;
+    border: none;
+    border-radius: $border-radius-base;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      background-color: $error-light;
+    }
+  }
+
+  .emptyPrograms {
+    color: $text-secondary;
+    text-align: center;
+    padding: 20px;
+  }
+}
+
+.demoPromptActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+
+  button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: $border-radius-base;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:first-child {
+      background-color: rgba($text-secondary, 0.1);
+      color: $text-primary;
+
+      &:hover {
+        background-color: rgba($text-secondary, 0.2);
+      }
+    }
+
+    &:last-child {
+      background-color: $highlight-success;
+      color: white;
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+
+      &:hover {
+        background-color: darken($highlight-success, 5%);
+        transform: translateY(-1px);
+      }
+
+      &:active {
+        transform: translateY(1px);
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+      }
+    }
+  }
+}
+
+.achievementOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+.achievementPopup {
+  background: linear-gradient(135deg, #ffd93d 0%, #ff9500 100%);
+  border-radius: $border-radius-large;
+  padding: 30px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.3);
+  text-align: center;
+  animation: scaleIn 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  h3 {
+    margin: 0 0 10px 0;
+    color: white;
+    font-size: 20px;
+    font-weight: 700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  h4 {
+    margin: 0 0 10px 0;
+    color: white;
+    font-size: 24px;
+    font-weight: 700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  }
+
+  p {
+    margin: 0 0 20px 0;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 16px;
+  }
+}
+
+.achievementIcon {
+  font-size: 72px;
+  margin-bottom: 15px;
+  animation: bounce 0.5s ease infinite alternate;
+}
+
+.achievementClose {
+  padding: 12px 30px;
+  background-color: white;
+  color: $highlight-success;
+  border: none;
+  border-radius: $border-radius-base;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  }
+
+  &:active {
+    transform: translateY(1px);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  }
+}
+
+.hintSection {
+  margin-top: 15px;
+}
+
+.input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 2px solid rgba($text-secondary, 0.2);
+  border-radius: $border-radius-base;
+  font-size: 14px;
+  margin-bottom: 15px;
+  transition: all 0.2s ease;
+
+  &:focus {
+    outline: none;
+    border-color: $highlight-success;
+    box-shadow: 0 0 0 3px rgba($highlight-success, 0.1);
+  }
+
+  &::placeholder {
+    color: rgba($text-secondary, 0.5);
+  }
+}
+
+.programList {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 15px;
+}
+
+.programItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes bounce {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-10px);
+  }
+}

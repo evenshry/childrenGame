@@ -1,0 +1,94 @@
+.programmingCard {
+  background-color: white;
+  border-radius: $border-radius-large;
+  padding: 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  margin-bottom: 20px;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    border-color: rgba($primary-btn, 0.2);
+  }
+
+  .icon {
+    font-size: 40px;
+    margin-bottom: 12px;
+    animation: bounce 2s infinite;
+  }
+
+  .title {
+    font-size: 20px;
+    font-weight: 700;
+    color: $text-primary;
+    margin-bottom: 12px;
+  }
+
+  .concept {
+    font-size: 16px;
+    font-weight: 700;
+    color: $loop-command;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background-color: rgba($loop-command, 0.1);
+    border-radius: $border-radius-base;
+  }
+
+  .description {
+    font-size: 14px;
+    color: $text-secondary;
+    margin-bottom: 16px;
+    line-height: 1.6;
+  }
+
+  .example {
+    background-color: rgba($text-secondary, 0.03);
+    border-radius: $border-radius-base;
+    padding: 12px;
+
+    h4 {
+      font-size: 14px;
+      font-weight: 700;
+      color: $text-primary;
+      margin-bottom: 8px;
+    }
+
+    pre {
+      font-family: 'Quicksand', 'Courier New', Courier, monospace;
+      font-size: 12px;
+      color: $text-primary;
+      white-space: pre-wrap;
+      margin: 0;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .programmingCard {
+    padding: 16px;
+
+    .title {
+      font-size: 18px;
+    }
+
+    .concept {
+      font-size: 14px;
+    }
+
+    .description {
+      font-size: 13px;
+    }
+
+    .example {
+      h4 {
+        font-size: 13px;
+      }
+
+      pre {
+        font-size: 11px;
+      }
+    }
+  }
+}

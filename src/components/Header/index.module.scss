@@ -1,0 +1,119 @@
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, $turn-command 0%, $turn-dark 100%);
+  color: white;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  position: relative;
+
+  @media (max-width: 768px) {
+    padding: 0.75rem 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+
+  @media (max-width: 768px) {
+    gap: 1rem;
+    flex: 1;
+  }
+
+  @media (max-width: 480px) {
+    gap: 0.5rem;
+  }
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: 700;
+
+  @media (max-width: 480px) {
+    font-size: 1.2rem;
+  }
+}
+
+.levelInfo {
+  font-size: 1.1rem;
+  font-weight: 600;
+
+  @media (max-width: 480px) {
+    font-size: 0.9rem;
+  }
+}
+
+.stars {
+  font-size: 1.1rem;
+
+  @media (max-width: 480px) {
+    font-size: 0.9rem;
+  }
+}
+
+.headerButtons {
+  display: flex;
+  gap: 0.75rem;
+
+  @media (max-width: 768px) {
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 480px) {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+.headerButton {
+  padding: 0.5rem 1.2rem;
+  border: none;
+  border-radius: $border-radius-button;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+  min-width: 80px;
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+
+  &:active {
+    transform: translateY(1px);
+    background: rgba(255, 255, 255, 0.4);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+  }
+
+  &.active {
+    background: white;
+    color: $turn-command;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba($turn-command, 0.3);
+  }
+
+  &.active:hover {
+    background: $primary-pale;
+  }
+
+  @media (max-width: 480px) {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.85rem;
+    min-width: 70px;
+  }
+}

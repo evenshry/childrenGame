@@ -1,0 +1,112 @@
+$primary-bg: #F9F7F3;
+$canvas-bg: #F0EFEA;
+$primary-btn: #FFB347;
+$primary-btn-hover: #E89830;
+$primary-btn-active: #CC8830;
+$primary-light: #FFD699;
+$primary-soft: #FFF2DF;
+$primary-pale: #FFF8EE;
+
+$secondary-btn: #AAD0E6;
+$secondary-dark: #89B8D4;
+$secondary-light: #C8E4F2;
+
+$highlight-success: #6FCF97;
+$success-dark: #5DB882;
+$success-light: #A3DEBC;
+
+$warning-error: #E66767;
+$error-dark: #CC5252;
+$error-light: #F28B8B;
+
+$forward-command: #82B74E;
+$forward-dark: #6B9640;
+$forward-light: #A3D176;
+
+$turn-command: #F4A261;
+$turn-dark: #D88A4A;
+$turn-light: #F7C49B;
+
+$loop-command: #7AB8F0;
+$loop-dark: #5E9BD8;
+$loop-light: #B3D9F5;
+
+$condition-command: #BE8FCE;
+$condition-dark: #9A72B5;
+$condition-light: #D4B8E5;
+
+$wait-command: #FF9ED2;
+$wait-dark: #E87CB0;
+$wait-light: #FFBCE0;
+
+$random-command: #6FCF97;
+$random-dark: #5DB882;
+$random-light: #A3DEBC;
+
+$movement-command: #5DD3D6;
+$movement-dark: #4AB8BA;
+$movement-light: #8CE5E7;
+
+$interaction-command: #F6D365;
+$interaction-dark: #E8C04D;
+$interaction-light: #FAE198;
+
+$text-primary: #3A3A3A;
+$text-secondary: #7A7A7A;
+$text-light: #AAAAAA;
+
+$robot-primary: #FFD93D;
+$robot-secondary: #82B74E;
+$star-color: #FFD93D;
+$goal-color: #6FCF97;
+$wall-color: #4a5568;
+$obstacle-color: #E66767;
+
+$spacing-unit: 8px;
+$border-radius-base: 16px;
+$border-radius-large: 24px;
+$border-radius-button: 40px;
+
+$grid-color: #D1CFC9;
+$grid-border: 1px;
+
+$breakpoints: (
+  xs: 480px,
+  sm: 576px,
+  md: 768px,
+  lg: 992px,
+  xl: 1200px,
+);
+
+@mixin card-style {
+  background: $primary-bg;
+  border-radius: $border-radius-large;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  border: 2px solid rgba(255, 255, 255, 0.8);
+
+  &:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+  }
+}
+
+@mixin button-hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+@mixin command-block-shadow {
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.1);
+}
+
+@mixin command-block-active {
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+}
+
+@mixin mobile {
+  @media (max-width: #{$breakpoints}) {
+    @content;
+  }
+}

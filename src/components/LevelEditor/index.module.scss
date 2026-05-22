@@ -1,0 +1,860 @@
+@use '@/styles' as *;
+
+.levelEditor {
+  flex: 1;
+  width: 100%;
+  padding: 24px;
+  background: linear-gradient(135deg, $primary-btn 0%, $primary-btn-hover 100%);
+  border-radius: $border-radius-large;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  overflow: auto;
+  transition: all 0.3s ease;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+
+  .editorTitle {
+    text-align: center;
+    margin: 0;
+    font-size: 1.8rem;
+    color: $text-primary;
+    font-weight: 700;
+    text-shadow: 0 3px 6px rgba(254, 254, 254, 0.5);
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 20px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: $border-radius-large;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    flex-wrap: wrap;
+    justify-content: center;
+
+    @media (max-width: 1024px) {
+      gap: 12px;
+      padding: 12px 16px;
+    }
+
+    @media (max-width: 768px) {
+      gap: 10px;
+      padding: 10px 12px;
+    }
+  }
+
+  .toolbarSection {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    @media (max-width: 768px) {
+      gap: 8px;
+    }
+  }
+
+  .toolbarLabel {
+    font-size: 14px;
+    font-weight: 700;
+    color: $primary-btn;
+    white-space: nowrap;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, rgba($primary-btn, 0.1) 0%, rgba($primary-btn, 0.05) 100%);
+    border-radius: $border-radius-base;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.05);
+
+    @media (max-width: 768px) {
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+  }
+
+  .toolbarDivider {
+    width: 2px;
+    height: 40px;
+    background: linear-gradient(180deg, transparent, rgba($primary-btn, 0.2), transparent);
+    flex-shrink: 0;
+
+    @media (max-width: 768px) {
+      height: 32px;
+    }
+  }
+
+  .levelSelection {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    @media (max-width: 768px) {
+      gap: 8px;
+    }
+  }
+
+  .levelNameInput {
+    display: flex;
+    align-items: center;
+  }
+
+  .nameInput {
+    padding: 8px 14px;
+    border: 2px solid rgba($highlight-success, 0.3);
+    border-radius: $border-radius-base;
+    font-size: 14px;
+    font-weight: 500;
+    background: white;
+    color: $text-primary;
+    transition: all 0.2s ease;
+    min-width: 160px;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.05);
+
+    &:focus {
+      outline: none;
+      border-color: $highlight-success;
+      box-shadow: 0 0 0 3px rgba($highlight-success, 0.2);
+    }
+
+    &::placeholder {
+      color: rgba($text-secondary, 0.6);
+      font-weight: 400;
+    }
+
+    @media (max-width: 768px) {
+      font-size: 13px;
+      padding: 6px 12px;
+      min-width: 120px;
+    }
+
+    @media (max-width: 480px) {
+      min-width: 100px;
+      font-size: 12px;
+    }
+  }
+
+  .saveButton {
+    padding: 10px 18px;
+    border: 3px solid rgba($highlight-success, 0.4);
+    border-radius: $border-radius-base;
+    background: linear-gradient(135deg, $highlight-success 0%, darken($highlight-success, 8%) 100%);
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.1);
+      border-color: rgba($highlight-success, 0.6);
+      animation: saveButtonPulse 0.6s ease-in-out infinite;
+    }
+
+    &:active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+      animation: none;
+    }
+
+    @media (max-width: 768px) {
+      font-size: 13px;
+      padding: 8px 14px;
+    }
+
+    @media (max-width: 480px) {
+      font-size: 12px;
+      padding: 6px 12px;
+    }
+  }
+
+  @keyframes saveButtonPulse {
+    0%, 100% {
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1), 0 0 0 0 rgba($highlight-success, 0.4);
+    }
+    50% {
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1), 0 0 0 8px rgba($highlight-success, 0);
+    }
+  }
+
+  .levelSelect {
+    padding: 10px 32px 10px 12px;
+    border: 2px solid rgba($primary-btn, 0.3);
+    border-radius: $border-radius-base;
+    font-size: 14px;
+    font-weight: 600;
+    background: white;
+    color: $text-primary;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23FFB347' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    min-width: 140px;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.05);
+
+    &:focus {
+      outline: none;
+      border-color: $primary-btn;
+      box-shadow: 0 0 0 3px rgba($primary-btn, 0.2);
+    }
+
+    option {
+      padding: 8px;
+      background: white;
+    }
+
+    @media (max-width: 768px) {
+      font-size: 13px;
+      padding: 8px 28px 8px 10px;
+      min-width: 120px;
+    }
+
+    @media (max-width: 480px) {
+      min-width: 100px;
+      font-size: 12px;
+    }
+  }
+
+  .newLevelButton {
+    padding: 10px 16px;
+    border: 3px dashed rgba($primary-btn, 0.4);
+    border-radius: $border-radius-base;
+    background: linear-gradient(135deg, $primary-btn 0%, $primary-btn-hover 100%);
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.1);
+      border-color: rgba($primary-btn, 0.6);
+    }
+
+    &:active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    @media (max-width: 768px) {
+      font-size: 13px;
+      padding: 8px 12px;
+    }
+
+    @media (max-width: 480px) {
+      font-size: 12px;
+      padding: 6px 10px;
+    }
+  }
+
+  .toolButtons,
+  .directionButtons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .toolButton,
+  .dirButton {
+    padding: 10px 14px;
+    border: 3px solid transparent;
+    border-radius: $border-radius-button;
+    background: linear-gradient(135deg, $loop-light 0%, $loop-command 100%);
+    color: white;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1);
+    position: relative;
+    overflow: hidden;
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: -100%;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+      transition: left 0.5s ease;
+    }
+
+    &:hover::before {
+      left: 100%;
+    }
+
+    &:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    &:active {
+      transform: translateY(1px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    &.active {
+      border-color: $star-color;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1), 0 0 15px rgba($star-color, 0.4);
+      transform: translateY(-1px);
+    }
+
+    @media (max-width: 768px) {
+      padding: 8px 12px;
+      font-size: 13px;
+      border-radius: 16px;
+    }
+
+    @media (max-width: 480px) {
+      padding: 6px 10px;
+      font-size: 12px;
+      border-radius: 14px;
+    }
+  }
+
+  .wallTool {
+    background: linear-gradient(135deg, $loop-light 0%, $loop-command 100%);
+
+    &:hover {
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    &.active {
+      border-color: $star-color;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1), 0 0 15px rgba($loop-command, 0.5);
+    }
+  }
+
+  .goalTool {
+    background: linear-gradient(135deg, $highlight-success 0%, darken($highlight-success, 8%) 100%);
+
+    &:hover {
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    &.active {
+      border-color: $star-color;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1), 0 0 15px rgba($highlight-success, 0.5);
+    }
+  }
+
+  .robotTool {
+    background: linear-gradient(135deg, $turn-command 0%, darken($turn-command, 8%) 100%);
+
+    &:hover {
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    &.active {
+      border-color: $star-color;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1), 0 0 15px rgba($turn-command, 0.5);
+    }
+  }
+
+  .starTool {
+    background: linear-gradient(135deg, $star-color 0%, $primary-btn 100%);
+    color: $text-primary;
+
+    &:hover {
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    &.active {
+      border-color: $loop-command;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1), 0 0 15px rgba($star-color, 0.5);
+    }
+  }
+
+  .emptyTool {
+    background: linear-gradient(135deg, $warning-error 0%, darken($warning-error, 8%) 100%);
+
+    &:hover {
+      box-shadow: 0 5px 0 rgba(0, 0, 0, 0.1);
+    }
+
+    &.active {
+      border-color: $star-color;
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1), 0 0 15px rgba($warning-error, 0.5);
+    }
+  }
+
+  .sizeControls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .sizeInput {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: linear-gradient(135deg, $loop-light 0%, $loop-command 100%);
+    padding: 8px 12px;
+    border-radius: $border-radius-base;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1);
+
+    label {
+      font-size: 14px;
+      font-weight: 600;
+      color: white;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 768px) {
+      gap: 6px;
+      padding: 6px 10px;
+
+      label {
+        font-size: 12px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      label {
+        display: none;
+      }
+    }
+  }
+
+  .numberInput {
+    width: 60px;
+    padding: 6px 10px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: $border-radius-base;
+    font-size: 14px;
+    font-weight: 600;
+    background: rgba(255, 255, 255, 0.95);
+    color: $text-primary;
+    transition: all 0.2s ease;
+    text-align: center;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.05);
+
+    &:focus {
+      outline: none;
+      border-color: $star-color;
+      box-shadow: 0 0 0 3px rgba($star-color, 0.3);
+    }
+
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      opacity: 1;
+    }
+
+    @media (max-width: 768px) {
+      width: 50px;
+      padding: 5px 8px;
+      font-size: 13px;
+    }
+
+    @media (max-width: 480px) {
+      width: 45px;
+    }
+  }
+
+  .editorCanvas {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 24px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: $border-radius-large;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+    backdrop-filter: blur(10px);
+    overflow: auto;
+
+    @media (max-width: 768px) {
+      padding: 20px;
+    }
+
+    @media (max-width: 480px) {
+      padding: 16px;
+    }
+  }
+
+  .newLevelModal {
+    padding: 8px 0;
+
+    .modalField {
+      margin-bottom: 16px;
+
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+        color: $text-primary;
+        font-size: 14px;
+      }
+    }
+
+    .modalSizeFields {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 20px;
+
+      .modalField {
+        flex: 1;
+        margin-bottom: 0;
+      }
+    }
+
+    .modalActions {
+      display: flex;
+      justify-content: flex-end;
+      padding-top: 8px;
+      border-top: 1px solid rgba(0, 0, 0, 0.08);
+    }
+  }
+
+  .gridContainer {
+    gap: 3px;
+    background: linear-gradient(135deg, $primary-btn 0%, $primary-btn-hover 100%);
+    border-radius: $border-radius-base;
+    overflow: hidden;
+    padding: 16px;
+    box-shadow: inset 0 4px 12px rgba(0, 0, 0, 0.05), 0 8px 24px rgba($primary-btn, 0.15);
+
+    @media (max-width: 768px) {
+      padding: 12px;
+    }
+
+    @media (max-width: 480px) {
+      padding: 10px;
+      gap: 2px;
+    }
+  }
+
+  .gridCell {
+    width: 50px;
+    height: 50px;
+    background-color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    border: 3px solid rgba($primary-btn, 0.2);
+    transition: all 0.2s ease;
+    position: relative;
+    // overflow: hidden;
+    border-radius: $border-radius-base;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.05);
+
+    &::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.3) 0%, transparent 70%);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    &:hover::before {
+      opacity: 1;
+    }
+
+    &:hover {
+      background-color: rgba($primary-btn, 0.05);
+      border-color: $star-color;
+      transform: scale(1.1) rotate(2deg);
+      z-index: 10;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+    }
+
+    @media (max-width: 768px) {
+      width: 40px;
+      height: 40px;
+      font-size: 22px;
+    }
+
+    @media (max-width: 480px) {
+      width: 34px;
+      height: 34px;
+      font-size: 18px;
+      border-radius: 12px;
+    }
+  }
+
+  .gridCell.wall {
+    background: linear-gradient(135deg, $loop-light 0%, $loop-command 100%);
+    color: white;
+    border-color: rgba($loop-command, 0.5);
+    box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.15), 0 4px 0 rgba(0, 0, 0, 0.1);
+    animation: wallPulse 3s infinite ease-in-out;
+
+    &:hover {
+      animation: none;
+      transform: scale(1.15) rotate(-2deg);
+    }
+  }
+
+  .gridCell.goal {
+    background: linear-gradient(135deg, $highlight-success 0%, darken($highlight-success, 8%) 100%);
+    color: white;
+    border-color: rgba($highlight-success, 0.5);
+    box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.15), 0 4px 0 rgba(0, 0, 0, 0.1);
+    animation: goalGlow 2s infinite ease-in-out;
+
+    &:hover {
+      animation: none;
+      transform: scale(1.15) rotate(2deg);
+    }
+  }
+
+  .gridCell.robot {
+    background: linear-gradient(135deg, $turn-command 0%, darken($turn-command, 8%) 100%);
+    color: white;
+    border-color: rgba($turn-command, 0.5);
+    box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.15), 0 4px 0 rgba(0, 0, 0, 0.1);
+    animation: robotBounce 2s infinite ease-in-out;
+
+    &:hover {
+      animation: none;
+      transform: scale(1.15) rotate(-2deg);
+    }
+  }
+
+  .gridCell.star {
+    background: linear-gradient(135deg, $star-color 0%, $primary-btn 100%);
+    color: $text-primary;
+    border-color: rgba($star-color, 0.5);
+    box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.1), 0 4px 0 rgba(0, 0, 0, 0.1);
+    animation: starTwinkle 1.5s infinite ease-in-out;
+
+    &:hover {
+      animation: none;
+      transform: scale(1.15) rotate(3deg);
+    }
+  }
+
+  @media (max-width: 768px) {
+    padding: 20px;
+    .editorTitle {
+      font-size: 1.5rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    padding: 16px;
+    .editorTitle {
+      font-size: 1.3rem;
+    }
+  }
+}
+
+@keyframes wallPulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+@keyframes goalGlow {
+  0%, 100% {
+    box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.15), 0 4px 0 rgba(0, 0, 0, 0.1), 0 0 0 0 rgba($highlight-success, 0.4);
+  }
+  50% {
+    box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.15), 0 4px 0 rgba(0, 0, 0, 0.1), 0 0 20px 5px rgba($highlight-success, 0.2);
+  }
+}
+
+@keyframes robotBounce {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-3px) rotate(-3deg);
+  }
+  75% {
+    transform: translateY(-3px) rotate(3deg);
+  }
+}
+
+@keyframes starTwinkle {
+  0%, 100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.1) rotate(5deg);
+    opacity: 0.9;
+  }
+}
+
+.robotCell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.robotBody {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, #64b5f6 0%, #1976d2 100%);
+  border-radius: 50%;
+  position: relative;
+  box-shadow: inset 0 -3px 6px rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.1);
+  animation: editorRobotBounce 1.5s infinite ease-in-out;
+}
+
+.robotEyes {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 6px;
+}
+
+.robotEye {
+  width: 6px;
+  height: 6px;
+  background: white;
+  border-radius: 50%;
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background: #333;
+    border-radius: 50%;
+    top: 1px;
+    left: 2px;
+  }
+}
+
+.robotMouth {
+  position: absolute;
+  bottom: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 5px;
+  border: 2px solid #333;
+  border-top: none;
+  border-radius: 0 0 10px 10px;
+}
+
+.robotAntenna {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2px;
+  height: 6px;
+  background: #1976d2;
+  z-index: 1;
+}
+ 
+.robotAntennaBall {
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 8px;
+  height: 8px;
+  background: radial-gradient(circle at 30% 30%, #ff6b6b, #ee5a5a);
+  border-radius: 50%;
+  animation: antennaBlink 1s infinite;
+  z-index: 1;
+}
+
+.robotDirection {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+ 
+.robotDirection.dirRight {
+  border-width: 5px 0 5px 8px;
+  border-color: transparent transparent transparent #ff9800;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+ 
+.robotDirection.dirLeft {
+  border-width: 5px 8px 5px 0;
+  border-color: transparent #ff9800 transparent transparent;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+ 
+.robotDirection.dirUp {
+  border-width: 0 5px 8px 5px;
+  border-color: transparent transparent #ff9800 transparent;
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+ 
+.robotDirection.dirDown {
+  border-width: 8px 5px 0 5px;
+  border-color: #ff9800 transparent transparent transparent;
+  bottom: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+@keyframes editorRobotBounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes antennaBlink {
+  0%, 100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translateX(-50%) scale(0.8);
+  }
+}
+
+.gridCell.robot {
+  background: linear-gradient(135deg, rgba(100, 181, 246, 0.3) 0%, rgba(25, 118, 210, 0.2) 100%);
+  border: 2px solid rgba(25, 118, 210, 0.4);
+  box-shadow: 0 0 10px rgba(100, 181, 246, 0.3);
+  animation: none;
+  padding: 4px;
+
+  &:hover {
+    animation: none;
+    transform: scale(1.1);
+    box-shadow: 0 0 15px rgba(100, 181, 246, 0.5);
+  }
+}

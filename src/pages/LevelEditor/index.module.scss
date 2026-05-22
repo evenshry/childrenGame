@@ -1,0 +1,56 @@
+@use '@/styles' as *;
+
+.levelEditorPage {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 20px;
+
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+    padding: 16px 24px;
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+
+    h1 {
+      margin: 0;
+      font-size: 1.8rem;
+      color: $text-primary;
+      text-align: center;
+    }
+
+    .backButton {
+      padding: 8px 16px;
+      font-weight: 600;
+    }
+
+    .spacer {
+      width: 120px;
+    }
+
+    @media (max-width: 768px) {
+      flex-direction: column;
+      gap: 12px;
+      text-align: center;
+
+      .spacer {
+        display: none;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+    }
+  }
+
+  .content {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+  }
+}

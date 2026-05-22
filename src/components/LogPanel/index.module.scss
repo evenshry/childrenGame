@@ -1,0 +1,321 @@
+@use '@/styles' as *;
+
+.executionLog {
+  margin-top: 20px;
+  padding: 20px;
+  background: linear-gradient(135deg, $loop-command 0%, $loop-dark 100%);
+  border-radius: $border-radius-large;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+
+  h4 {
+    margin: 0 0 15px 0;
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+
+  @media (max-width: 768px) {
+    margin-top: 15px;
+    padding: 15px;
+  }
+
+  @media (max-width: 480px) {
+    margin-top: 12px;
+    padding: 12px;
+  }
+}
+
+.logHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 10px;
+
+  h4 {
+    margin: 0;
+    flex: 1;
+  }
+}
+
+.logControls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.filterSelect {
+  padding: 6px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: $border-radius-base;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: $star-color;
+  }
+
+  option {
+    background: $primary-btn;
+    color: white;
+  }
+}
+
+.clearButton {
+  padding: 6px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: $border-radius-base;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+
+  &:hover {
+    background: rgba($warning-error, 0.3);
+    border-color: rgba($warning-error, 0.5);
+    transform: translateY(-1px);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.1);
+  }
+
+  &:active {
+    transform: translateY(1px);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+  }
+}
+
+.logContainer {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: $border-radius-base;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.05);
+
+  @media (max-width: 768px) {
+    max-height: 140px;
+    padding: 10px;
+  }
+
+  @media (max-width: 480px) {
+    max-height: 120px;
+    padding: 8px;
+  }
+}
+
+.logEntry {
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba($text-secondary, 0.1);
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  animation: logSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border-radius: $border-radius-base;
+  margin-bottom: 6px;
+  transition: all 0.2s ease;
+
+  &:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+  }
+
+  &:hover {
+    background: rgba($loop-command, 0.05);
+    transform: translateX(4px);
+  }
+
+  &.empty {
+    color: rgba($text-secondary, 0.6);
+    font-style: italic;
+    text-align: center;
+    justify-content: center;
+    animation: fadeIn 0.5s ease;
+  }
+
+  &.success {
+    background: linear-gradient(135deg, rgba($highlight-success, 0.1) 0%, rgba($highlight-success, 0.03) 100%);
+    border-left: 3px solid $highlight-success;
+    
+    .logIcon {
+      color: $highlight-success;
+    }
+  }
+
+  &.error {
+    background: linear-gradient(135deg, rgba($warning-error, 0.1) 0%, rgba($warning-error, 0.03) 100%);
+    border-left: 3px solid $warning-error;
+    animation: logSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), shake 0.5s ease 0.1s;
+    
+    .logIcon {
+      color: $warning-error;
+    }
+  }
+
+  &.warning {
+    background: linear-gradient(135deg, rgba($primary-btn, 0.1) 0%, rgba($primary-btn, 0.03) 100%);
+    border-left: 3px solid $primary-btn;
+    
+    .logIcon {
+      color: $primary-btn;
+    }
+  }
+
+  &.debug {
+    background: linear-gradient(135deg, rgba($loop-command, 0.1) 0%, rgba($loop-command, 0.03) 100%);
+    border-left: 3px solid $loop-command;
+    
+    .logIcon {
+      color: $loop-command;
+    }
+  }
+
+  @media (max-width: 480px) {
+    font-size: 12px;
+    padding: 8px 10px;
+    gap: 8px;
+  }
+}
+
+.logIcon {
+  font-size: 18px;
+  flex-shrink: 0;
+  animation: iconBounce 0.5s ease;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.1));
+
+  @media (max-width: 480px) {
+    font-size: 16px;
+  }
+}
+
+.logMessage {
+  flex: 1;
+  color: $text-primary;
+  word-break: break-word;
+}
+
+.logFooter {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: $border-radius-base;
+  backdrop-filter: blur(4px);
+}
+
+.logCount {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 600;
+}
+
+.scrollToBottom {
+  padding: 4px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: $border-radius-base;
+  background: rgba(255, 255, 255, 0.2);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+}
+
+@keyframes logSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-8px);
+  }
+  40% {
+    transform: translateX(8px);
+  }
+  60% {
+    transform: translateX(-8px);
+  }
+  80% {
+    transform: translateX(8px);
+  }
+}
+
+@keyframes iconBounce {
+  0% {
+    transform: scale(0) rotate(-180deg);
+  }
+  50% {
+    transform: scale(1.2) rotate(10deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+.logContainer::-webkit-scrollbar {
+  width: 8px;
+}
+
+.logContainer::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+.logContainer::-webkit-scrollbar-thumb {
+  background: rgba($primary-btn, 0.3);
+  border-radius: 4px;
+}
+
+.logContainer::-webkit-scrollbar-thumb:hover {
+  background: rgba($primary-btn, 0.5);
+}

@@ -1,0 +1,493 @@
+@use "@/styles" as *;
+
+.commandBlockWrapper {
+  position: relative;
+  margin: 4px 0;
+}
+
+.commandBlock {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-radius: 16px;
+  cursor: grab;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.1);
+  min-height: 56px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+  }
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.1);
+  }
+
+  &:active {
+    cursor: grabbing;
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
+  }
+
+  &.dragging {
+    opacity: 0.8;
+    cursor: grabbing;
+    transform: scale(1.05) rotate(1deg);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+  }
+
+  &.hovered {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.1);
+  }
+
+  &.dropOver {
+    background-color: rgba(255, 242, 223, 0.6);
+    box-shadow: 0 0 0 3px rgba($primary-btn, 0.4);
+    transform: scale(1.02);
+  }
+
+  &.currentStep {
+    animation:
+      pulse 1.5s infinite,
+      glow 2s infinite;
+    border-color: rgba(255, 255, 255, 0.6);
+  }
+
+  &.breakpoint::before {
+    content: "";
+    position: absolute;
+    left: -16px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 12px;
+    height: 12px;
+    background-color: $warning-error;
+    border-radius: 50%;
+    box-shadow: 0 0 12px $warning-error;
+    animation: blink 1s infinite;
+  }
+
+  &.dropBefore {
+    border-top: 4px solid $primary-btn;
+    box-shadow: 0 -4px 16px rgba($primary-btn, 0.5);
+
+    &::after {
+      content: "";
+      position: absolute;
+      top: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-bottom: 8px solid $primary-btn;
+    }
+  }
+
+  &.dropAfter {
+    border-bottom: 4px solid $primary-btn;
+    box-shadow: 0 4px 16px rgba($primary-btn, 0.5);
+
+    &::after {
+      content: "";
+      position: absolute;
+      bottom: -10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top: 8px solid $primary-btn;
+    }
+  }
+
+  @media (max-width: 768px) {
+    padding: 14px 18px;
+    min-height: 60px;
+    font-size: 15px;
+  }
+
+  @media (max-width: 480px) {
+    padding: 16px 20px;
+    min-height: 70px;
+    gap: 12px;
+    border-radius: 20px;
+  }
+}
+
+@keyframes dropOverPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1.02);
+  }
+}
+
+.breakpointButton {
+  background: rgba(255, 255, 255, 0.3);
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  cursor: pointer;
+  padding: 4px 10px;
+  margin-right: 10px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+
+  &:hover {
+    transform: scale(1.2);
+    background: rgba(255, 255, 255, 0.5);
+  }
+
+  &.active {
+    color: $warning-error;
+    font-size: 20px;
+    animation: bounce 0.5s ease;
+    background: rgba($warning-error, 0.2);
+  }
+}
+
+.forward {
+  background: linear-gradient(135deg, $forward-command 0%, darken($forward-command, 8%) 100%);
+  color: white;
+}
+
+.turn {
+  background: linear-gradient(135deg, $turn-command 0%, darken($turn-command, 8%) 100%);
+  color: white;
+}
+
+.loop {
+  background: linear-gradient(135deg, $loop-light 0%, $loop-command 100%);
+  color: white;
+}
+
+.condition {
+  background: linear-gradient(135deg, $condition-command 0%, darken($condition-command, 8%) 100%);
+  color: white;
+}
+
+.wait {
+  background: linear-gradient(135deg, $wait-command 0%, darken($wait-command, 8%) 100%);
+  color: white;
+}
+
+.randomTurn {
+  background: linear-gradient(135deg, $highlight-success 0%, darken($highlight-success, 8%) 100%);
+  color: white;
+}
+
+.movement {
+  background: linear-gradient(135deg, $movement-command 0%, darken($movement-command, 8%) 100%);
+  color: white;
+}
+
+.interaction {
+  background: linear-gradient(135deg, $interaction-command 0%, darken($interaction-command, 8%) 100%);
+  color: $text-primary;
+}
+
+.special {
+  background: linear-gradient(135deg, $loop-light 0%, $loop-command 100%);
+  color: white;
+}
+
+.commandIcon {
+  font-size: 24px;
+  margin-right: 8px;
+  animation: iconBounce 3s infinite ease-in-out;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+
+  @media (max-width: 480px) {
+    font-size: 22px;
+    margin-right: 10px;
+  }
+}
+
+.commandLabel {
+  font-weight: bold;
+  font-size: 16px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+  flex: 1;
+  letter-spacing: 0.5px;
+
+  @media (max-width: 480px) {
+    font-size: 14px;
+  }
+}
+
+.conditionSelectorWrapper {
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.timesSelectorWrapper {
+  margin-right: 12px;
+  flex-shrink: 0;
+}
+
+.timesSelect {
+  background: rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 14px;
+  min-width: 60px;
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+    border-color: rgba(255, 255, 255, 0.6);
+    transform: scale(1.05);
+  }
+
+  &:focus {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.8);
+  }
+
+  option {
+    background: #667eea;
+    color: white;
+    font-weight: 600;
+    padding: 8px;
+  }
+
+  @media (max-width: 480px) {
+    font-size: 12px;
+    padding: 4px 8px;
+    min-width: 50px;
+  }
+}
+
+.commandActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.actionButton {
+  background: rgba(255, 255, 255, 0.25);
+  border: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+
+  &:hover {
+    background-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.15) rotate(5deg);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+
+  @media (max-width: 480px) {
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+  }
+}
+
+.removeButton {
+  background: rgba($warning-error, 0.3);
+  border: none;
+  color: white;
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  font-weight: bold;
+
+  &:hover {
+    background-color: rgba($warning-error, 0.6);
+    transform: scale(1.15) rotate(90deg);
+  }
+
+  &:active {
+    transform: scale(0.9);
+  }
+
+  @media (max-width: 480px) {
+    width: 28px;
+    height: 28px;
+    font-size: 18px;
+  }
+}
+
+.commandChildren {
+  margin-top: 10px;
+  margin-left: 24px;
+  padding: 20px 16px;
+  border-left: 3px dashed rgba(255, 255, 255, 0.5);
+  min-height: 80px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  position: relative;
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+
+  @media (max-width: 480px) {
+    margin-top: 8px;
+    margin-left: 16px;
+    padding: 16px 12px;
+    min-height: 60px;
+    border-left-width: 2px;
+  }
+}
+
+.childDropOver {
+  background-color: rgba($primary-btn, 0.2);
+  border-left-color: rgba($primary-btn, 0.7);
+  border-left-width: 4px;
+  box-shadow: inset 0 0 24px rgba($primary-btn, 0.2);
+}
+
+.addChildPlaceholder {
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0) 100%);
+  border-radius: 8px;
+  text-align: center;
+  color: #666;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px dashed rgba(255, 255, 255, 0.3);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #666;
+    transform: scale(1.02);
+  }
+
+  @media (max-width: 480px) {
+    padding: 12px;
+    font-size: 11px;
+  }
+}
+
+.dropIndicator {
+  height: 6px;
+  width: 100%;
+  background: transparent;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+  margin: 4px 0;
+
+  &.active {
+    background: linear-gradient(90deg, transparent, $primary-btn, rgba($primary-btn, 0.7), transparent);
+    height: 8px;
+    box-shadow: 0 0 12px rgba($primary-btn, 0.5);
+  }
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba($primary-btn, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba($primary-btn, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba($primary-btn, 0);
+  }
+}
+
+@keyframes glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 12px rgba($primary-btn, 0.4),
+      0 0 24px rgba($primary-btn, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 24px rgba($primary-btn, 0.6),
+      0 0 48px rgba($primary-btn, 0.3);
+  }
+}
+
+@keyframes blink {
+  0%,
+  50%,
+  100% {
+    opacity: 1;
+    transform: translateY(-50%) scale(1);
+  }
+  25%,
+  75% {
+    opacity: 0.5;
+    transform: translateY(-50%) scale(0.8);
+  }
+}
+
+@keyframes bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes iconBounce {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-3px) rotate(-5deg);
+  }
+  75% {
+    transform: translateY(-3px) rotate(5deg);
+  }
+}
