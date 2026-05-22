@@ -4,7 +4,7 @@ export const useDebounce = <T extends (...args: any[]) => any>(
   callback: T,
   delay: number
 ): ((...args: Parameters<T>) => void) => {
-  const timeoutRef = useRef<NodeJS.Timeout>();
+  const timeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     return () => {
@@ -89,7 +89,7 @@ export const batchUpdates = <T extends (...args: any[]) => void>(
   interval: number = 16
 ): T => {
   let batch: Parameters<T>[] = [];
-  let timeoutId: NodeJS.Timeout | null = null;
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
 
   const flush = () => {
     const currentBatch = [...batch];
