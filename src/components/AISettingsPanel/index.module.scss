@@ -1,0 +1,61 @@
+.settingsContainer {
+  padding: 8px 0;
+}
+
+.section {
+  padding: 8px 0;
+}
+
+.settingRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.settingInfo {
+  flex: 1;
+}
+
+.settingLabel {
+  font-weight: 500;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.usageInfo {
+  margin-top: 12px;
+}
+
+.usageRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.progressBar {
+  height: 8px;
+  background: #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.progressFill {
+  height: 100%;
+  transition: width 0.3s ease;
+  border-radius: 4px;
+}
+
+.historyHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.emptyHistory {
+  text-align: center;
+  padding: 24px 0;
+}

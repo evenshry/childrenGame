@@ -83,7 +83,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
+  margin-bottom: 10px;
 
   h3 {
     margin: 0;
@@ -114,168 +114,19 @@
 .editorButtons {
   display: flex;
   gap: 8px;
-}
-
-.actionButton,
-.programManagerButton {
-  padding: 6px 12px;
-  background-color: rgba($text-secondary, 0.08);
-  border: none;
-  border-radius: $border-radius-base;
-  font-size: 13px;
-  font-weight: 600;
-  color: $text-primary;
-  cursor: pointer;
-  transition: all 0.2s ease;
-
-  &:hover:not(:disabled) {
-    background-color: rgba($text-secondary, 0.15);
-    transform: translateY(-1px);
-  }
-
-  &:active:not(:disabled) {
-    transform: translateY(1px);
-  }
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  &.active {
-    background-color: $turn-command;
-    color: white;
-  }
-
-  &.runButton {
-    background-color: $highlight-success;
-    color: white;
-    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
-
-    &:hover:not(:disabled) {
-      background-color: darken($highlight-success, 5%);
-    }
-  }
-
-  &.clearButton {
-    &:hover:not(:disabled) {
-      background-color: $error-light;
-      color: white;
-    }
-
-    &:active:not(:disabled) {
-      background-color: $warning-error;
-    }
-  }
-}
-
-.programManagerButton {
-  background-color: $turn-command;
-  color: white;
-  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.1);
-
-  &:hover:not(:disabled) {
-    background-color: $turn-dark;
-  }
-
-  &:active {
-    transform: translateY(1px);
-    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
-  }
+  margin-bottom: 15px;
 }
 
 .levelNav {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
   padding: 10px;
-  background-color: rgba($text-secondary, 0.03);
-  border-radius: $border-radius-base;
   gap: 10px;
 }
 
 .spacer {
   flex: 1;
-}
-
-.navButton {
-  padding: 8px 16px;
-  background: linear-gradient(135deg, $secondary-btn 0%, darken($secondary-btn, 8%) 100%);
-  color: white;
-  border: none;
-  border-radius: $border-radius-base;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow:
-    0 3px 0 rgba(0, 0, 0, 0.1),
-    0 4px 12px rgba(0, 0, 0, 0.08);
-  min-width: 90px;
-
-  &:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow:
-      0 5px 0 rgba(0, 0, 0, 0.1),
-      0 8px 20px rgba(0, 0, 0, 0.12);
-  }
-
-  &:active:not(:disabled) {
-    transform: translateY(1px);
-    box-shadow:
-      0 1px 0 rgba(0, 0, 0, 0.1),
-      0 2px 8px rgba(0, 0, 0, 0.08);
-  }
-
-  &:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-    background: linear-gradient(135deg, #ccc 0%, #aaa 100%);
-    box-shadow: none;
-  }
-
-  &.saveButton {
-    background: linear-gradient(135deg, $highlight-success 0%, darken($highlight-success, 8%) 100%);
-    box-shadow:
-      0 3px 0 rgba(67, 160, 71, 0.3),
-      0 4px 12px rgba(111, 207, 151, 0.3);
-
-    &:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow:
-        0 5px 0 rgba(67, 160, 71, 0.3),
-        0 8px 20px rgba(111, 207, 151, 0.4);
-    }
-
-    &:active:not(:disabled) {
-      transform: translateY(1px);
-      box-shadow:
-        0 1px 0 rgba(67, 160, 71, 0.3),
-        0 2px 8px rgba(111, 207, 151, 0.2);
-    }
-  }
-
-  &.loadButton {
-    background: linear-gradient(135deg, $turn-command 0%, darken($turn-command, 8%) 100%);
-    box-shadow:
-      0 3px 0 rgba(255, 152, 0, 0.3),
-      0 4px 12px rgba(244, 162, 97, 0.3);
-
-    &:hover:not(:disabled) {
-      transform: translateY(-2px);
-      box-shadow:
-        0 5px 0 rgba(255, 152, 0, 0.3),
-        0 8px 20px rgba(244, 162, 97, 0.4);
-    }
-
-    &:active:not(:disabled) {
-      transform: translateY(1px);
-      box-shadow:
-        0 1px 0 rgba(255, 152, 0, 0.3),
-        0 2px 8px rgba(244, 162, 97, 0.2);
-    }
-  }
 }
 
 .levelTitle {

@@ -1,5 +1,18 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
+import { Button, message, Modal, Spin } from "antd";
+import {
+  BulbOutlined,
+  LeftOutlined,
+  RightOutlined,
+  SaveOutlined,
+  FolderOpenOutlined,
+  PlayCircleOutlined,
+  DeleteOutlined,
+  BugOutlined,
+  UndoOutlined,
+  RedoOutlined,
+} from "@ant-design/icons";
 import CommandPanel from "@/components/CommandPanel";
 import CommandsContainer from "@/components/CommandsContainer";
 import GameCanvas from "@/components/GameCanvas";
@@ -9,9 +22,11 @@ import HintSystem, { generateHints } from "@/components/HintSystem";
 import { useGameStore } from "@/store";
 import { levels, generateId, getAllLevels } from "@/utils/constants";
 import { executeCommand, flattenCommands, getDirectionLabel, getCommandLabel, isValidPosition } from "@/utils/gameEngine";
-import { playClickSound, playSuccessSound, playLevelUpSound } from "@/utils/animations";
-import { checkAchievements, achievementDefinitions } from "@/utils/achievements";
+import { playClickSound, playLevelUpSound } from "@/utils/animations";
+import { checkAchievements } from "@/utils/achievements";
 import { progressStorage, statsStorage, achievementStorage, programStorage } from "@/utils/storage";
+import { useAIAutoSolver } from "@/hooks/useAIAutoSolver";
+import { useAIStore } from "@/store/aiStore";
 import type { Command, RobotState, DebugStep, Direction, Achievement, SavedProgram, ConditionType } from "@/types/global";
 import styles from "./index.module.scss";
 
@@ -68,7 +83,95 @@ const Game: React.FC = () => {
   const location = useLocation();
   const [showAchievementNotification, setShowAchievementNotification] = useState<Achievement | null>(null);
   const [levelHint, setLevelHint] = useState<string>("");
-  
+  const [showSolveModal, setShowSolveModal] = useState(false);
+
+  const { solve, error } = useAIAutoSolver();
+  const { settings, isGenerating, isDailyLimitReached } = useAIStore();
+
+  const handleUseLevelResult = (result: any) => {
+    if (result && result.map) {
+      setCurrentMap({
+        width: result.map.width,
+        height: result.map.height,
+        cells: result.map.cells.map((cell: any) => ({
+          x: cell.x,
+          y: cell.y,
+          type: cell.type,
+          dir: cell.dir,
+        })),
+        stars: result.map.stars.map((star: any) => ({
+          x: star.x,
+          y: star.y,
+          type: "star",
+        })),
+      });
+
+      const robotCell = result.map.cells.find((cell: any) => cell.type === "robot");
+      if (robotCell) {
+        const newRobot = { x: robotCell.x, y: robotCell.y, dir: robotCell.dir || "right" };
+        setRobot(newRobot);
+        setDebugRobot(newRobot);
+      }
+    }
+  };
+
+  const handleUseSolverResult = (result: any) => {
+    if (result && result.commands) {
+      const newCommands = result.commands.map((cmd: any) => ({
+        ...cmd,
+        id: `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      }));
+      setCommands(newCommands);
+    }
+  };
+
+  const handleAutoSolve = async () => {
+    if (!settings.enableAutoSolve) {
+      message.warning("AI 自动解题功能已禁用，请在设置中开启");
+      return;
+    }
+
+    if (isDailyLimitReached()) {
+      message.warning("今日 Token 使用已达上限，请明天再试");
+      return;
+    }
+
+    const robotCell = currentMap.cells.find((cell) => cell.type === "robot");
+    const goalCell = currentMap.cells.find((cell) => cell.type === "goal");
+
+    if (!robotCell || !goalCell) {
+      message.error("无法找到机器人或目标位置");
+      return;
+    }
+
+    setShowSolveModal(true);
+
+    try {
+      const result = await solve({
+        map: currentMap,
+        startX: robotCell.x,
+        startY: robotCell.y,
+        startDir: robotCell.dir || "right",
+        goalX: goalCell.x,
+        goalY: goalCell.y,
+      });
+
+      if (result) {
+        handleUseSolverResult(result);
+        message.success("AI 解题成功！");
+        if (result.explanation) {
+          message.info(result.explanation);
+        }
+      } else if (error) {
+        message.error(error);
+      }
+    } catch (err) {
+      message.error("AI 解题失败，请重试");
+    } finally {
+      setShowSolveModal(false);
+    }
+  };
+
   // 程序保存/加载相关状态
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
@@ -96,7 +199,7 @@ const Game: React.FC = () => {
       setNotification({ message: "请先添加指令", type: "warning" });
       return;
     }
-    
+
     if (!programName.trim()) {
       setNotification({ message: "请输入程序名称", type: "warning" });
       return;
@@ -118,17 +221,23 @@ const Game: React.FC = () => {
     setNotification({ message: "程序保存成功！", type: "success" });
   }, [commands, programName, currentLevelData.id, loadSavedPrograms]);
 
-  const handleLoadProgram = useCallback((program: SavedProgram) => {
-    setCommands(deepCopyCommands(program.commands));
-    setShowLoadDialog(false);
-    setNotification({ message: `已加载程序: ${program.name}`, type: "success" });
-  }, [setCommands]);
+  const handleLoadProgram = useCallback(
+    (program: SavedProgram) => {
+      setCommands(deepCopyCommands(program.commands));
+      setShowLoadDialog(false);
+      setNotification({ message: `已加载程序: ${program.name}`, type: "success" });
+    },
+    [setCommands],
+  );
 
-  const handleDeleteProgram = useCallback((programId: string) => {
-    programStorage.delete(programId);
-    loadSavedPrograms();
-    setNotification({ message: "程序已删除", type: "info" });
-  }, [loadSavedPrograms]);
+  const handleDeleteProgram = useCallback(
+    (programId: string) => {
+      programStorage.delete(programId);
+      loadSavedPrograms();
+      setNotification({ message: "程序已删除", type: "info" });
+    },
+    [loadSavedPrograms],
+  );
 
   useEffect(() => {
     const levelIdParam = searchParams.get("level");
@@ -260,9 +369,9 @@ const Game: React.FC = () => {
   );
 
   const handleAddChild = useCallback(
-    (parentId: string, childCommand: Command, branch: 'children' | 'elseChildren' = 'children') => {
+    (parentId: string, childCommand: Command, branch: "children" | "elseChildren" = "children") => {
       let found = false;
-      
+
       const addChildCommand = (cmds: Command[]): Command[] => {
         return cmds.map((cmd) => {
           if (cmd.id === parentId) {
@@ -272,15 +381,15 @@ const Game: React.FC = () => {
               id: `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
               children: childCommand.children ? [...childCommand.children] : undefined,
             };
-            if (branch === 'children') {
-              console.log('✅ handleAddChild:', {
+            if (branch === "children") {
+              console.log("✅ handleAddChild:", {
                 parentType: cmd.type,
                 childType: childCommand.type,
                 branch,
               });
               return { ...cmd, children: [...(cmd.children || []), newChild] };
             } else {
-              console.log('✅ handleAddChild:', {
+              console.log("✅ handleAddChild:", {
                 parentType: cmd.type,
                 childType: childCommand.type,
                 branch,
@@ -303,13 +412,13 @@ const Game: React.FC = () => {
           return cmd;
         });
       };
-      
+
       const newCommands = addChildCommand(commands);
-      
+
       if (!found) {
-        console.warn('❌ handleAddChild: Parent not found', parentId);
+        console.warn("❌ handleAddChild: Parent not found", parentId);
       }
-      
+
       setCommands(newCommands);
     },
     [commands, setCommands],
@@ -529,31 +638,34 @@ const Game: React.FC = () => {
     [breakpoints],
   );
 
-  const handleLevelComplete = useCallback((starsCollected: number, commandsUsed: number) => {
-    playLevelUpSound();
-    
-    const level = currentLevelData;
-    
-    progressStorage.completeLevel(level.id, starsCollected, commandsUsed);
-    
-    const isPerfect = starsCollected >= level.map.stars.length && commandsUsed <= (level.minCommands || 1);
-    if (isPerfect) {
-      statsStorage.recordPerfectLevel();
-    }
-    
-    statsStorage.updateConsecutiveDays();
-    
-    const updatedStats = statsStorage.get();
-    const achievements = checkAchievements(updatedStats);
-    const unlockedIds = achievementStorage.getUnlockedIds();
-    
-    achievements.forEach((achievement) => {
-      if (!unlockedIds.includes(achievement.id)) {
-        achievementStorage.unlock(achievement);
-        setShowAchievementNotification(achievement);
+  const handleLevelComplete = useCallback(
+    (starsCollected: number, commandsUsed: number) => {
+      playLevelUpSound();
+
+      const level = currentLevelData;
+
+      progressStorage.completeLevel(level.id, starsCollected, commandsUsed);
+
+      const isPerfect = starsCollected >= level.map.stars.length && commandsUsed <= (level.minCommands || 1);
+      if (isPerfect) {
+        statsStorage.recordPerfectLevel();
       }
-    });
-  }, [currentLevelData]);
+
+      statsStorage.updateConsecutiveDays();
+
+      const updatedStats = statsStorage.get();
+      const achievements = checkAchievements(updatedStats);
+      const unlockedIds = achievementStorage.getUnlockedIds();
+
+      achievements.forEach((achievement) => {
+        if (!unlockedIds.includes(achievement.id)) {
+          achievementStorage.unlock(achievement);
+          setShowAchievementNotification(achievement);
+        }
+      });
+    },
+    [currentLevelData],
+  );
 
   const handleRunProgram = useCallback(() => {
     setIsRunning(true);
@@ -795,76 +907,80 @@ const Game: React.FC = () => {
                 <div className={styles.levelInfo}>
                   <span className={styles.levelName}>{currentLevelIndex < levels.length ? currentLevelData.name : "自定义关卡"}</span>
                   <span className={styles.levelBadge}>
-                    🌟 {currentLevelIndex + 1}/{levels.length}
+                    🌟 {currentLevelIndex + 1}/{allLevelsCount}
                   </span>
                 </div>
                 <div className={styles.levelNav}>
-                  <button
-                    className={styles.navButton}
+                  <Button
+                    icon={<LeftOutlined />}
                     onClick={prevLevel}
                     disabled={currentLevelIndex === 0 || currentLevelIndex >= allLevelsCount}
                   >
-                    ← 上一关
-                  </button>
-                  <button className={styles.navButton} onClick={nextLevel} disabled={currentLevelIndex >= allLevelsCount - 1}>
-                    下一关 →
-                  </button>
+                    上一关
+                  </Button>
+                  <Button icon={<RightOutlined />} onClick={nextLevel} disabled={currentLevelIndex >= allLevelsCount - 1}>
+                    下一关
+                  </Button>
                   <div className={styles.spacer}></div>
-                  <button
-                    className={`${styles.navButton} ${styles.saveButton}`}
+                  <Button
+                    icon={<SaveOutlined />}
+                    type="primary"
                     onClick={() => {
                       playClickSound();
                       setShowSaveDialog(true);
                     }}
                   >
-                    💾 保存
-                  </button>
-                  <button
-                    className={`${styles.navButton} ${styles.loadButton}`}
+                    保存
+                  </Button>
+                  <Button
+                    icon={<FolderOpenOutlined />}
                     onClick={() => {
                       playClickSound();
                       setShowLoadDialog(true);
                     }}
                   >
-                    📂 加载
-                  </button>
+                    加载
+                  </Button>
                 </div>
               </div>
 
               <div className={styles.editorButtons}>
-                <button
-                  className={`${styles.actionButton} ${styles.runButton}`}
+                <Button
+                  type="primary"
+                  icon={<PlayCircleOutlined />}
                   onClick={() => {
                     playClickSound();
                     handleRunProgram();
                   }}
                 >
-                  ▶️ 运行
-                </button>
-                <button
-                  className={`${styles.actionButton} ${styles.clearButton}`}
+                  运行
+                </Button>
+                <Button
+                  danger
+                  icon={<DeleteOutlined />}
                   onClick={() => {
                     playClickSound();
                     clearCommands();
                   }}
                 >
-                  🗑️ 清空
-                </button>
-                <button
-                  className={`${styles.actionButton} ${isDebugMode ? styles.active : ""}`}
+                  清空
+                </Button>
+                <Button
+                  type={isDebugMode ? "primary" : "default"}
+                  icon={<BugOutlined />}
                   onClick={() => {
                     playClickSound();
                     setIsDebugMode(!isDebugMode);
                   }}
                 >
-                  🔧 调试模式
-                </button>
-                <button className={styles.actionButton} onClick={handleUndo} disabled={historyIndex <= 0} title="撤销">
-                  <span>↩</span>
-                </button>
-                <button className={styles.actionButton} onClick={handleRedo} disabled={historyIndex >= history.length - 1} title="重做">
-                  <span>↪</span>
-                </button>
+                  调试模式
+                </Button>
+                <Button icon={<UndoOutlined />} onClick={handleUndo} disabled={historyIndex <= 0} title="撤销" />
+                <Button icon={<RedoOutlined />} onClick={handleRedo} disabled={historyIndex >= history.length - 1} title="重做" />
+                <div className={styles.spacer}></div>
+                <Button type="primary" icon={<BulbOutlined />} onClick={handleAutoSolve} disabled={isGenerating}>
+                  AI解题
+                </Button>
               </div>
 
               <div className={styles.commandsContainerWrapper}>
@@ -951,13 +1067,25 @@ const Game: React.FC = () => {
             )}
             <div className={styles.hintSection}>
               <HintSystem
-                hints={generateHints(currentLevelData.id, currentLevelData.minCommands <= 3 ? 'basic' : currentLevelData.minCommands <= 6 ? 'loop' : 'collect')}
+                hints={generateHints(
+                  currentLevelData.id,
+                  currentLevelData.minCommands <= 3 ? "basic" : currentLevelData.minCommands <= 6 ? "loop" : "collect",
+                )}
                 levelHint={currentLevelData.hint}
               />
             </div>
           </div>
         </div>
+
+        
       </main>
+
+      <Modal title="AI 正在解题..." open={showSolveModal} footer={null} closable={false} centered>
+        <div style={{ textAlign: "center", padding: "20px" }}>
+          <Spin size="large" />
+          <p style={{ marginTop: "16px" }}>正在分析关卡并生成最优解，请稍候...</p>
+        </div>
+      </Modal>
 
       {showDemoPrompt && (
         <div className={styles.demoPromptOverlay} onClick={() => setShowDemoPrompt(false)}>
@@ -1025,11 +1153,7 @@ const Game: React.FC = () => {
                     <button className={styles.loadButton} onClick={() => handleLoadProgram(program)}>
                       {program.name}
                     </button>
-                    <button
-                      className={styles.deleteButton}
-                      onClick={() => handleDeleteProgram(program.id)}
-                      title="删除程序"
-                    >
+                    <button className={styles.deleteButton} onClick={() => handleDeleteProgram(program.id)} title="删除程序">
                       🗑️
                     </button>
                   </div>

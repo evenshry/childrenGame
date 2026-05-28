@@ -9,6 +9,7 @@ export interface HeaderProps {
   onRunProgram: () => void;
   onToggleDebug: () => void;
   onClearProgram: () => void;
+  onOpenAISettings?: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -18,6 +19,7 @@ const Header: React.FC<HeaderProps> = ({
   onRunProgram,
   onToggleDebug,
   onClearProgram,
+  onOpenAISettings,
 }) => {
   return (
     <header className={styles.header}>
@@ -56,6 +58,17 @@ const Header: React.FC<HeaderProps> = ({
         >
           🔧 调试模式
         </button>
+        {onOpenAISettings && (
+          <button
+            className={styles.headerButton}
+            onClick={() => {
+              playClickSound();
+              onOpenAISettings();
+            }}
+          >
+            🤖 AI设置
+          </button>
+        )}
       </div>
     </header>
   );

@@ -3,6 +3,7 @@ import { Modal, Input, InputNumber, Button, Space } from 'antd';
 import { MapData, Cell, CellType, Direction, Level } from '@/types/global';
 import Notification from '@/components/Notification';
 import LevelPicker from '@/components/LevelPicker';
+import AIGenButton from './AIGenButton';
 import { playClickSound } from '@/utils/animations';
 import { customLevelStorage } from '@/utils/storage';
 import { generateId, getLevelById } from '@/utils/constants';
@@ -50,7 +51,15 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
   const [editingLevelName, setEditingLevelName] = useState<string>('未命名关卡');
   const [isCustomLevel, setIsCustomLevel] = useState(false);
   const hasInitializedRef = useRef(false);
- 
+
+  const handleMapChange = (newMap: MapData) => {
+    setWidth(newMap.width);
+    setHeight(newMap.height);
+    setCells(newMap.cells);
+    setStars(newMap.stars);
+    onMapChange(newMap);
+  };
+
   useEffect(() => {
     if (levels.length > 0 && !hasInitializedRef.current && !editingLevelId && !currentLevelId) {
       hasInitializedRef.current = true;
@@ -68,7 +77,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
       }
     }
   }, [levels]);
- 
+
   useEffect(() => {
     if (currentLevelId) {
       setWidth(map.width);
@@ -164,8 +173,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
     }
 
     if (editingLevelId) {
-      // 查找当前关卡的原始数据（用于保留 minCommands 和 hint）
-      const originalLevel = getLevelById(editingLevelId);
+      const originalLevel = customLevelStorage.getById(editingLevelId) || getLevelById(editingLevelId);
       const updatedLevel: Level = {
         ...(originalLevel || {}),
         id: editingLevelId,
@@ -176,20 +184,12 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
       };
       customLevelStorage.save(updatedLevel);
       
-      // 更新状态
       if (!isCustomLevel) {
         setIsCustomLevel(true);
       }
       
-      const refreshedLevel = getLevelById(editingLevelId);
-      if (refreshedLevel) {
-        setWidth(refreshedLevel.map.width);
-        setHeight(refreshedLevel.map.height);
-        setCells(refreshedLevel.map.cells);
-        setStars(refreshedLevel.map.stars);
-        const updatedMap = { width: refreshedLevel.map.width, height: refreshedLevel.map.height, cells: refreshedLevel.map.cells, stars: refreshedLevel.map.stars };
-        onMapChange(updatedMap);
-      }
+      const updatedMap = { width, height, cells, stars };
+      onMapChange(updatedMap);
       
       if (onCreateNewLevel) {
         onCreateNewLevel();
@@ -220,6 +220,33 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
         message: `已创建新关卡 "${editingLevelName.trim()}"`,
         type: 'success'
       });
+    }
+  };
+
+  const handleCreateNewLevelFromAI = (map: MapData) => {
+    const newLevelId = `custom_${generateId()}`;
+    const newLevelName = `AI关卡 ${new Date().toLocaleString()}`;
+    const newLevel: Level = {
+      id: newLevelId,
+      name: newLevelName,
+      map: map,
+      minCommands: 1,
+      hint: 'AI生成的关卡',
+    };
+    
+    customLevelStorage.save(newLevel);
+    
+    setEditingLevelId(newLevelId);
+    setEditingLevelName(newLevelName);
+    setWidth(map.width);
+    setHeight(map.height);
+    setCells(map.cells);
+    setStars(map.stars);
+    setIsCustomLevel(true);
+    onMapChange(map);
+    
+    if (onCreateNewLevel) {
+      onCreateNewLevel();
     }
   };
  
@@ -372,6 +399,9 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
                 playClickSound();
                 setShowNewLevelDialog(true);
               }}
+              onDeleteLevel={() => {
+                playClickSound();
+              }}
             />
           </div>
         </div>
@@ -399,6 +429,11 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
           >
             💾 保存
           </button>
+          <AIGenButton 
+            onMapChange={handleMapChange} 
+            onCreateNewLevel={handleCreateNewLevelFromAI}
+            currentLevelId={editingLevelId}
+          />
         </div>
  
         <div className={styles.toolbarDivider}></div>

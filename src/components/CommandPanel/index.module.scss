@@ -9,26 +9,36 @@
   padding: 20px;
   overflow-y: auto;
 
-  h3 {
-    margin-bottom: 20px;
-    color: $forward-command;
-    text-align: center;
-    font-size: 18px;
-    font-weight: 700;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-
-    @media (max-width: 480px) {
-      font-size: 16px;
-      margin-bottom: 15px;
-    }
-  }
-
   @media (max-width: 768px) {
     padding: 15px;
   }
 
   @media (max-width: 480px) {
     padding: 12px;
+  }
+}
+
+.panelHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+
+  h3 {
+    margin: 0;
+    color: $forward-command;
+    font-size: 18px;
+    font-weight: 700;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+  @media (max-width: 480px) {
+    flex-direction: column;
+    gap: 10px;
+    
+    h3 {
+      font-size: 16px;
+    }
   }
 }
 
