@@ -6,6 +6,8 @@ interface AISettings {
   enableLevelGeneration: boolean;
   enableAutoSolve: boolean;
   dailyTokenLimit: number;
+  apiKey: string;
+  apiBaseUrl: string;
 }
 
 interface LevelHistoryData {
@@ -62,6 +64,8 @@ const DEFAULT_SETTINGS: AISettings = {
   enableLevelGeneration: true,
   enableAutoSolve: true,
   dailyTokenLimit: 10000,
+  apiKey: '',
+  apiBaseUrl: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
 };
 
 const loadSettings = (): AISettings => {
@@ -168,3 +172,23 @@ export const useAIStore = create<AIState & AIActions>()(
 );
 
 export type { AIHistoryEntry, AISettings, LevelHistoryData, SolverHistoryData };
+
+export const getApiKey = (): string => {
+  const { settings } = useAIStore.getState();
+  if (settings.apiKey) {
+    return settings.apiKey;
+  }
+  return import.meta.env.VITE_QIANWEN_API_KEY || '';
+};
+
+export const getApiBaseUrl = (): string => {
+  const { settings } = useAIStore.getState();
+  if (settings.apiBaseUrl) {
+    return settings.apiBaseUrl;
+  }
+  return import.meta.env.VITE_QIANWEN_API_BASE_URL || 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation';
+};
+
+export const hasApiKey = (): boolean => {
+  return !!getApiKey();
+};

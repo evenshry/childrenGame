@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Drawer, Switch, Select, InputNumber, Button, Divider, Typography, Space, Modal } from 'antd';
-import { RocketOutlined, BulbOutlined, ReloadOutlined, QuestionCircleOutlined, HistoryOutlined } from '@ant-design/icons';
-import { useAIStore } from '@/store/aiStore';
+import { Drawer, Switch, Select, InputNumber, Button, Divider, Typography, Space, Modal, Input, Alert, message } from 'antd';
+import { RocketOutlined, BulbOutlined, ReloadOutlined, QuestionCircleOutlined, HistoryOutlined, KeyOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
+import { useAIStore, hasApiKey } from '@/store/aiStore';
 import AIHelp from './AIHelp';
 import AIHistoryViewer from './AIHistoryViewer';
 import styles from './index.module.scss';
@@ -24,6 +24,7 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
 }) => {
   const [showHelp, setShowHelp] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
   const {
     settings,
     usage,
@@ -32,6 +33,13 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
   } = useAIStore();
 
   const usagePercentage = Math.min(100, (usage.todayTokens / settings.dailyTokenLimit) * 100);
+  const apiKeyConfigured = hasApiKey();
+
+  const handleSaveApiKey = () => {
+    if (settings.apiKey && settings.apiKey.trim()) {
+      message.success('API Key 已保存');
+    }
+  };
 
   return (
     <>
@@ -61,6 +69,52 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
         open={open}
       >
       <div className={styles.settingsContainer}>
+        {!apiKeyConfigured && (
+          <Alert
+            message="请配置 API Key"
+            description="未检测到有效的 API Key，AI 功能将无法使用。请在下方输入您的通义千问 API Key。"
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+          />
+        )}
+
+        <div className={styles.section}>
+          <Title level={4}>API 配置</Title>
+          
+          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <div className={styles.settingRow}>
+              <div className={styles.settingInfo}>
+                <div className={styles.settingLabel}>
+                  <KeyOutlined /> API Key
+                </div>
+                <Text type="secondary">通义千问 API 密钥</Text>
+              </div>
+            </div>
+            <Input.Password
+              placeholder="请输入 API Key (sk-...)"
+              value={settings.apiKey}
+              onChange={(e) => updateSettings({ apiKey: e.target.value })}
+              visibilityToggle={{
+                visible: showApiKey,
+                onVisibleChange: setShowApiKey,
+              }}
+              style={{ width: '100%' }}
+            />
+            <Input
+              placeholder="API Base URL (可选)"
+              value={settings.apiBaseUrl}
+              onChange={(e) => updateSettings({ apiBaseUrl: e.target.value })}
+              style={{ width: '100%' }}
+            />
+            <Button type="primary" onClick={handleSaveApiKey} style={{ width: '100%' }}>
+              保存 API 配置
+            </Button>
+          </Space>
+        </div>
+
+        <Divider />
+
         <div className={styles.section}>
           <Title level={4}>功能开关</Title>
           

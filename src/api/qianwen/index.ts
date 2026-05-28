@@ -1,24 +1,26 @@
 import axios, { AxiosError } from 'axios';
 import { QianWenResponse, LevelGenRequest, SolverRequest } from './types';
 import { levelGenSystemPrompt, levelGenUserPrompt, solverSystemPrompt, solverUserPrompt } from './prompts';
-import { useAIStore } from '@/store/aiStore';
+import { useAIStore, getApiKey, getApiBaseUrl, hasApiKey } from '@/store/aiStore';
 import { useModelStore } from '@/store/modelStore';
 import { message } from 'antd';
-
-const QIANWEN_API_KEY = import.meta.env.VITE_QIANWEN_API_KEY || 'sk-61a48c93562d4ea2b0f0459183708a5d';
-const QIANWEN_API_BASE_URL = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation';
 
 const DEFAULT_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 
-const qianwenClient = axios.create({
-  baseURL: QIANWEN_API_BASE_URL,
-  headers: {
-    'Authorization': `Bearer ${QIANWEN_API_KEY}`,
-    'Content-Type': 'application/json',
-  },
-  timeout: 30000,
-});
+const getQianwenClient = () => {
+  const apiKey = getApiKey();
+  const baseUrl = getApiBaseUrl();
+  
+  return axios.create({
+    baseURL: baseUrl,
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    timeout: 30000,
+  });
+};
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -126,8 +128,14 @@ const getErrorType = (error: Error): string | undefined => {
 };
 
 export const generateLevel = async (request: LevelGenRequest): Promise<QianWenResponse> => {
+  if (!hasApiKey()) {
+    throw new Error('请先配置 API Key');
+  }
+  
+  const client = getQianwenClient();
+  
   return withRetry(async () => {
-    const response = await qianwenClient.post('', {
+    const response = await client.post('', {
       model: 'qwen-turbo',
       input: {
         messages: [
@@ -157,9 +165,15 @@ export const generateLevel = async (request: LevelGenRequest): Promise<QianWenRe
 };
 
 export const solveLevel = async (request: SolverRequest): Promise<QianWenResponse> => {
+  if (!hasApiKey()) {
+    throw new Error('请先配置 API Key');
+  }
+  
   return withModelSwitch(async (modelId: string) => {
+    const client = getQianwenClient();
+    
     const response = await withRetry(async () => {
-      return await qianwenClient.post('', {
+      return await client.post('', {
         model: modelId,
         input: {
           messages: [
