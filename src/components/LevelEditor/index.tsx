@@ -51,6 +51,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
   const [editingLevelName, setEditingLevelName] = useState<string>('未命名关卡');
   const [isCustomLevel, setIsCustomLevel] = useState(false);
   const hasInitializedRef = useRef(false);
+  const [dragOverCell, setDragOverCell] = useState<{ x: number; y: number } | null>(null);
 
   const handleMapChange = (newMap: MapData) => {
     setWidth(newMap.width);
@@ -382,7 +383,102 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
       }
     }
   };
- 
+
+  // === 拖拽功能 ===
+
+  const handleToolDragStart = (e: React.DragEvent<HTMLButtonElement>, tool: CellType) => {
+    e.dataTransfer.setData('tool', tool);
+    e.dataTransfer.setData('direction', selectedDirection);
+    e.dataTransfer.effectAllowed = 'copy';
+    setSelectedTool(tool);
+  };
+
+  const handleCellDragStart = (
+    e: React.DragEvent<HTMLDivElement>,
+    x: number,
+    y: number
+  ) => {
+    const cell = cells.find((c) => c.x === x && c.y === y);
+    const star = stars.find((s) => s.x === x && s.y === y);
+
+    if (cell) {
+      e.dataTransfer.setData('source', 'cell');
+      e.dataTransfer.setData('tool', cell.type);
+      e.dataTransfer.setData('direction', cell.dir || selectedDirection);
+      e.dataTransfer.setData('fromX', String(x));
+      e.dataTransfer.setData('fromY', String(y));
+      e.dataTransfer.effectAllowed = 'move';
+    } else if (star) {
+      e.dataTransfer.setData('source', 'star');
+      e.dataTransfer.setData('tool', 'star');
+      e.dataTransfer.setData('fromX', String(x));
+      e.dataTransfer.setData('fromY', String(y));
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  };
+
+  const handleGridDragOver = (e: React.DragEvent<HTMLDivElement>, x: number, y: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = e.dataTransfer.getData('source') ? 'move' : 'copy';
+    setDragOverCell({ x, y });
+  };
+
+  const handleGridDragLeave = () => {
+    setDragOverCell(null);
+  };
+
+  const handleGridDrop = (e: React.DragEvent<HTMLDivElement>, x: number, y: number) => {
+    e.preventDefault();
+    setDragOverCell(null);
+
+    const tool = e.dataTransfer.getData('tool') as CellType;
+    const direction = e.dataTransfer.getData('direction') as Direction;
+    const source = e.dataTransfer.getData('source');
+    const fromXStr = e.dataTransfer.getData('fromX');
+    const fromYStr = e.dataTransfer.getData('fromY');
+    const fromX = fromXStr !== '' ? parseInt(fromXStr, 10) : null;
+    const fromY = fromYStr !== '' ? parseInt(fromYStr, 10) : null;
+
+    let updatedCells = [...cells];
+    let updatedStars = [...stars];
+
+    // 如果是从网格中移动元素，先移除原位置的元素
+    if (source && fromX !== null && fromY !== null) {
+      if (source === 'cell') {
+        updatedCells = updatedCells.filter((c) => !(c.x === fromX && c.y === fromY));
+      } else if (source === 'star') {
+        updatedStars = updatedStars.filter((s) => !(s.x === fromX && s.y === fromY));
+      }
+    }
+
+    // 如果目标位置已有元素，移除它
+    updatedCells = updatedCells.filter((c) => !(c.x === x && c.y === y));
+    updatedStars = updatedStars.filter((s) => !(s.x === x && s.y === y));
+
+    if (tool === 'star') {
+      updatedStars.push({ x, y, type: 'star' });
+    } else if (tool === 'robot') {
+      updatedCells = updatedCells.filter((c) => c.type !== 'robot');
+      updatedCells.push({ x, y, type: 'robot', dir: direction });
+    } else if (tool === 'wall' || tool === 'goal') {
+      updatedCells.push({ x, y, type: tool });
+    }
+
+    setCells(updatedCells);
+    setStars(updatedStars);
+
+    const newMap = {
+      ...map,
+      cells: updatedCells,
+      stars: updatedStars,
+    };
+    onMapChange(newMap);
+
+    if (isCustomLevel && editingLevelId) {
+      saveCurrentCustomLevel();
+    }
+  };
+
   return (
     <div className={styles.levelEditor}>
       <h3 className={styles.editorTitle}>🎨 关卡编辑器</h3>
@@ -443,51 +539,61 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
           <div className={styles.toolButtons}>
             <button
               className={`${styles.toolButton} ${selectedTool === 'wall' ? styles.active : ''} ${styles.wallTool}`}
+              draggable
+              onDragStart={(e) => handleToolDragStart(e, 'wall')}
               onClick={() => {
                 playClickSound();
                 setSelectedTool('wall');
               }}
-              title="墙壁"
+              title="墙壁（可拖拽到网格）"
             >
               🧱
             </button>
             <button
               className={`${styles.toolButton} ${selectedTool === 'goal' ? styles.active : ''} ${styles.goalTool}`}
+              draggable
+              onDragStart={(e) => handleToolDragStart(e, 'goal')}
               onClick={() => {
                 playClickSound();
                 setSelectedTool('goal');
               }}
-              title="终点"
+              title="终点（可拖拽到网格）"
             >
               🚩
             </button>
             <button
               className={`${styles.toolButton} ${selectedTool === 'robot' ? styles.active : ''} ${styles.robotTool}`}
+              draggable
+              onDragStart={(e) => handleToolDragStart(e, 'robot')}
               onClick={() => {
                 playClickSound();
                 setSelectedTool('robot');
               }}
-              title="机器人"
+              title="机器人（可拖拽到网格）"
             >
               🤖
             </button>
             <button
               className={`${styles.toolButton} ${selectedTool === 'star' ? styles.active : ''} ${styles.starTool}`}
+              draggable
+              onDragStart={(e) => handleToolDragStart(e, 'star')}
               onClick={() => {
                 playClickSound();
                 setSelectedTool('star');
               }}
-              title="星星"
+              title="星星（可拖拽到网格）"
             >
               ⭐
             </button>
             <button
               className={`${styles.toolButton} ${selectedTool === 'empty' ? styles.active : ''} ${styles.emptyTool}`}
+              draggable
+              onDragStart={(e) => handleToolDragStart(e, 'empty')}
               onClick={() => {
                 playClickSound();
                 setSelectedTool('empty');
               }}
-              title="清除"
+              title="清除（可拖拽到网格）"
             >
               🗑️
             </button>
@@ -599,10 +705,13 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
             Array.from({ length: width }).map((_, x) => {
               const cell = cells.find((c) => c.x === x && c.y === y);
               const star = stars.find((s) => s.x === x && s.y === y);
- 
+              const isDragOver =
+                dragOverCell && dragOverCell.x === x && dragOverCell.y === y;
+
               let cellClass = styles.gridCell;
               let cellContent: React.ReactNode = '';
- 
+              const isDraggable = !!(cell || star);
+
               if (cell) {
                 switch (cell.type) {
                 case 'wall':
@@ -642,11 +751,20 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
                 cellClass += ` ${styles.star}`;
                 cellContent = '⭐';
               }
- 
+
+              if (isDragOver) {
+                cellClass += ` ${styles.dragOver}`;
+              }
+
               return (
                 <div
                   key={`${x}-${y}`}
                   className={cellClass}
+                  draggable={isDraggable}
+                  onDragStart={(e) => isDraggable && handleCellDragStart(e, x, y)}
+                  onDragOver={(e) => handleGridDragOver(e, x, y)}
+                  onDragLeave={handleGridDragLeave}
+                  onDrop={(e) => handleGridDrop(e, x, y)}
                   onClick={() => handleCellClick(x, y)}
                 >
                   {cellContent}
