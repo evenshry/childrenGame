@@ -16,9 +16,10 @@ const Notification: React.FC<NotificationProps> = ({
   onClose 
 }) => {
   useEffect(() => {
+    let timer: number | undefined;
     if (type === 'success') {
       playSuccessSound();
-      setTimeout(() => {
+      timer = window.setTimeout(() => {
         const notification = document.querySelector(`.${styles.notification}`) as HTMLElement | null;
         if (notification) {
           celebrateWin(notification);
@@ -27,6 +28,9 @@ const Notification: React.FC<NotificationProps> = ({
     } else if (type === 'error') {
       playErrorSound();
     }
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
   }, [type]);
 
   useEffect(() => {

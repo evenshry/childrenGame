@@ -4,15 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --mode deploy",
-    "build": "tsc -b && vite build",
-    "deploy": "tsc -b && vite build --mode deploy",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "deploy": "tsc --noEmit && vite build --mode deploy",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "preview": "vite preview"
   },
   "dependencies": {
-    "@types/react-dnd": "^3.0.2",
-    "@types/react-dnd-html5-backend": "^3.0.2",
     "antd": "^5.12.8",
     "axios": "^1.16.1",
     "react": "^18.2.0",
@@ -24,6 +23,7 @@
     "zustand": "^5.0.13"
   },
   "devDependencies": {
+    "@eslint/js": "^8.57.1",
     "@types/node": "^25.9.1",
     "@types/react": "^18.2.43",
     "@types/react-dom": "^18.2.17",
@@ -33,6 +33,7 @@
     "eslint": "^8.55.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
+    "globals": "^13.24.0",
     "typescript": "^6.0.3",
     "vite": "^8.0.9"
   },

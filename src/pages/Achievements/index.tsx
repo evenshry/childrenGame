@@ -12,18 +12,18 @@ const Achievements: React.FC = () => {
     const unlockedAchievements = achievementStorage.getAll();
     const unlockedMap = new Map(unlockedAchievements.map(a => [a.id, a]));
 
-    const achievementList = achievementDefinitions.map(def => {
+    const achievementList: Achievement[] = achievementDefinitions.map((def) => {
       const unlockedData = unlockedMap.get(def.id);
       return {
         id: def.id,
-        type: def.id as any,
+        type: def.id,
         name: def.name,
         description: def.description,
         icon: def.icon,
-        unlocked: !!unlockedData,
+        unlocked: !!unlockedData?.unlocked,
         unlockedAt: unlockedData?.unlockedAt,
         points: def.points,
-      } as Achievement;
+      };
     });
 
     setAchievements(achievementList);
@@ -31,7 +31,7 @@ const Achievements: React.FC = () => {
 
   return (
     <div className="achievements-page">
-      <AchievementWall achievements={achievements} />
+      <AchievementWall achievements={achievements} playerStats={statsStorage.get()} />
     </div>
   );
 };

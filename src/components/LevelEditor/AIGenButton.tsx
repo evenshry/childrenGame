@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Button, Modal, Form, Select, InputNumber, Radio, message, Space, Spin } from 'antd';
+import { Button, Modal, Form, Select, InputNumber, Radio, message, Spin } from 'antd';
 import { RocketOutlined } from '@ant-design/icons';
 import { useAILevelGenerator } from '@/hooks/useAILevelGenerator';
 import { useAIStore } from '@/store/aiStore';
-import { MapData } from '@/types/global';
+import { MapData, CellType, Direction } from '@/types/global';
 
 interface AIGenButtonProps {
   onMapChange: (map: MapData) => void;
@@ -11,11 +11,11 @@ interface AIGenButtonProps {
   currentLevelId?: string | null;
 }
 
-const AIGenButton: React.FC<AIGenButtonProps> = ({ onMapChange, onCreateNewLevel, currentLevelId }) => {
+const AIGenButton: React.FC<AIGenButtonProps> = ({ onMapChange, onCreateNewLevel, currentLevelId: _currentLevelId }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [applyMode, setApplyMode] = useState<'current' | 'new'>('current');
   const [form] = Form.useForm();
-  const { generate, error } = useAILevelGenerator();
+  const { generate } = useAILevelGenerator();
   const { isGenerating, settings, isDailyLimitReached } = useAIStore();
 
   const handleGenerate = async () => {
@@ -50,8 +50,8 @@ const AIGenButton: React.FC<AIGenButtonProps> = ({ onMapChange, onCreateNewLevel
         cells: result.map.cells.map(cell => ({
           x: cell.x,
           y: cell.y,
-          type: cell.type as any,
-          dir: cell.dir as any,
+          type: cell.type as CellType,
+          dir: cell.dir as Direction | undefined,
         })),
         stars: result.map.stars.map(star => ({
           x: star.x,
@@ -71,8 +71,8 @@ const AIGenButton: React.FC<AIGenButtonProps> = ({ onMapChange, onCreateNewLevel
       }
       
       setIsModalOpen(false);
-    } else if (error) {
-      message.error(error);
+    } else {
+      message.error('AI 生成关卡失败，请重试');
     }
   };
 

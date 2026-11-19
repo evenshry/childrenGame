@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import LevelSelector from '@/components/LevelSelector';
 import { progressStorage } from '@/utils/storage';
 import { levels as officialLevels, getAllLevels } from '@/utils/constants';
@@ -7,46 +7,39 @@ import './index.scss';
 
 const Levels: React.FC = () => {
   const navigate = useNavigate();
-  const [allLevels, setAllLevels] = useState(getAllLevels());
-  const [currentLevelId, setCurrentLevelId] = useState<string>(officialLevels[0]?.id || '');
+  const [searchParams] = useSearchParams();
+  const [allLevels, setAllLevels] = useState(() => getAllLevels());
+  const [currentLevelId, setCurrentLevelId] = useState<string>(
+    officialLevels[0]?.id || '',
+  );
   const [completedLevelIds, setCompletedLevelIds] = useState<string[]>([]);
+  const [levelRatings, setLevelRatings] = useState(() => progressStorage.getLevelRatings());
 
   useEffect(() => {
+    const levelsNow = getAllLevels();
+    setAllLevels(levelsNow);
     setCompletedLevelIds(progressStorage.getCompletedLevelIds());
-    setAllLevels(getAllLevels());
-  }, []);
+    setLevelRatings(progressStorage.getLevelRatings());
 
-  useEffect(() => {
-    const updateLevelFromUrl = () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const levelIdParam = urlParams.get('level');
-      if (levelIdParam) {
-        const allLevelsNow = getAllLevels();
-        const matchedLevel = allLevelsNow.find(l =>
-          l.id === levelIdParam ||
-          l.id === `level_0${levelIdParam}` ||
-          l.id === `level_${levelIdParam.padStart(2, '0')}`
-        );
-        if (matchedLevel) {
-          setCurrentLevelId(matchedLevel.id);
-        }
-      } else {
-        const currentIndex = progressStorage.getCurrentLevelIndex();
-        const safeIndex = Math.min(currentIndex, allLevels.length - 1);
-        setCurrentLevelId(allLevels[safeIndex]?.id || allLevels[0]?.id || '');
-      }
-    };
+    const levelIdParam = searchParams.get('level');
+    const matched = levelIdParam
+      ? levelsNow.find(
+          (level) =>
+            level.id === levelIdParam ||
+            level.id === `level_0${levelIdParam}` ||
+            level.id === `level_${levelIdParam.padStart(2, '0')}`,
+        )
+      : undefined;
 
-    updateLevelFromUrl();
+    if (matched) {
+      setCurrentLevelId(matched.id);
+      return;
+    }
 
-    const interval = setInterval(() => {
-      setAllLevels(getAllLevels());
-      setCompletedLevelIds(progressStorage.getCompletedLevelIds());
-      updateLevelFromUrl();
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [allLevels.length]);
+    const currentIndex = progressStorage.getCurrentLevelIndex();
+    const safeIndex = Math.min(Math.max(currentIndex, 0), levelsNow.length - 1);
+    setCurrentLevelId(levelsNow[safeIndex]?.id || levelsNow[0]?.id || '');
+  }, [searchParams]);
 
   const handleSelectLevel = (levelId: string) => {
     setCurrentLevelId(levelId);
@@ -59,7 +52,7 @@ const Levels: React.FC = () => {
         levels={allLevels}
         currentLevelId={currentLevelId}
         completedLevels={completedLevelIds}
-        levelRatings={progressStorage.getLevelRatings()}
+        levelRatings={levelRatings}
         onSelectLevel={handleSelectLevel}
       />
     </div>

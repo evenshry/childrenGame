@@ -18,6 +18,8 @@ export interface LevelEditorProps {
   currentLevelId?: string;
 }
  
+const isCustomLevelId = (id: string) => id.startsWith('custom_') || id.startsWith('ai_');
+
 const createEmptyMap = (width: number = 6, height: number = 6): MapData => ({
   width,
   height,
@@ -71,12 +73,13 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
       setHeight(firstLevel.map.height);
       setCells(firstLevel.map.cells);
       setStars(firstLevel.map.stars);
-      setIsCustomLevel(false);
+      setIsCustomLevel(isCustomLevelId(firstLevel.id));
       onMapChange(firstLevel.map);
       if (onLevelSelect) {
         onLevelSelect(firstLevel.id);
       }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [levels]);
 
   useEffect(() => {
@@ -86,7 +89,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
       setCells(map.cells);
       setStars(map.stars);
       setEditingLevelId(currentLevelId);
-      const isCustom = !levels.some(l => l.id === currentLevelId);
+      const isCustom = isCustomLevelId(currentLevelId);
       setIsCustomLevel(isCustom);
     }
   }, [map, currentLevelId, levels]);
@@ -101,7 +104,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
       setHeight(selectedLevel.map.height);
       setCells(selectedLevel.map.cells);
       setStars(selectedLevel.map.stars);
-      setIsCustomLevel(false);
+      setIsCustomLevel(isCustomLevelId(selectedLevel.id));
       onMapChange(selectedLevel.map);
     } else {
       const customLevel = customLevelStorage.getById(levelId);
@@ -131,7 +134,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
       return;
     }
  
-    const newLevelId = `custom_${generateId()}`;
+    const newLevelId = generateId('custom');
     const newMap = createEmptyMap(newLevelWidth, newLevelHeight);
     const newLevel: Level = {
       id: newLevelId,
@@ -164,7 +167,9 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
     });
   };
  
-  const saveCurrentCustomLevel = () => {
+  const saveCurrentCustomLevel = (
+    mapToSave: MapData = { width, height, cells, stars },
+  ) => {
     if (!editingLevelName.trim()) {
       setNotification({
         message: '请输入关卡名称',
@@ -179,7 +184,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
         ...(originalLevel || {}),
         id: editingLevelId,
         name: editingLevelName.trim(),
-        map: { width, height, cells, stars },
+        map: mapToSave,
         minCommands: originalLevel?.minCommands || 1,
         hint: originalLevel?.hint || '自定义关卡',
       };
@@ -189,8 +194,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
         setIsCustomLevel(true);
       }
       
-      const updatedMap = { width, height, cells, stars };
-      onMapChange(updatedMap);
+      onMapChange(mapToSave);
       
       if (onCreateNewLevel) {
         onCreateNewLevel();
@@ -201,11 +205,11 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
         type: 'success'
       });
     } else {
-      const newLevelId = `custom_${generateId()}`;
+      const newLevelId = generateId('custom');
       const newLevel: Level = {
         id: newLevelId,
         name: editingLevelName.trim(),
-        map: { width, height, cells, stars },
+        map: mapToSave,
         minCommands: 1,
         hint: '自定义关卡',
       };
@@ -225,7 +229,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
   };
 
   const handleCreateNewLevelFromAI = (map: MapData) => {
-    const newLevelId = `custom_${generateId()}`;
+    const newLevelId = generateId('custom');
     const newLevelName = `AI关卡 ${new Date().toLocaleString()}`;
     const newLevel: Level = {
       id: newLevelId,
@@ -278,7 +282,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
     onMapChange(newMap);
  
     if (isCustomLevel && editingLevelId) {
-      saveCurrentCustomLevel();
+      saveCurrentCustomLevel(newMap);
     }
   };
  
@@ -291,7 +295,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
       const newMap = { ...map, cells: newCells, stars: newStars };
       onMapChange(newMap);
       if (isCustomLevel && editingLevelId) {
-        saveCurrentCustomLevel();
+        saveCurrentCustomLevel(newMap);
       }
     };
     
@@ -475,7 +479,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
     onMapChange(newMap);
 
     if (isCustomLevel && editingLevelId) {
-      saveCurrentCustomLevel();
+      saveCurrentCustomLevel(newMap);
     }
   };
 
@@ -722,7 +726,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
                   cellClass += ` ${styles.goal}`;
                   cellContent = '🚩';
                   break;
-                case 'robot':
+                case 'robot': {
                   cellClass += ` ${styles.robot}`;
                   const dirClass = {
                     up: styles.dirUp,
@@ -746,6 +750,7 @@ const LevelEditor: React.FC<LevelEditorProps> = ({
                     </div>
                   );
                   break;
+                }
                 }
               } else if (star) {
                 cellClass += ` ${styles.star}`;

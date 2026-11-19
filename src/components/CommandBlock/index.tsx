@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { Command, ConditionType } from "@/types/global";
 import { playClickSound, playCollectSound } from "@/utils/animations";
+import type { CommandBranch, CommandLocation, DraggedCommand } from "@/utils/commandTree";
 import ConditionSelector from "@/components/ConditionSelector";
 import styles from "./index.module.scss";
 
@@ -13,13 +14,14 @@ interface ChildrenDropZoneProps {
   onCopy?: (command: Command) => void;
   onMoveUp?: (id: string) => void;
   onMoveDown?: (id: string) => void;
-  onDropBefore?: (index: number, draggedItem: { command: Command; isFromPanel: boolean }) => void;
-  onDropAfter?: (index: number, draggedItem: { command: Command; isFromPanel: boolean }) => void;
+  onDropBefore?: (location: CommandLocation, draggedItem: DraggedCommand) => void;
+  onDropAfter?: (location: CommandLocation, draggedItem: DraggedCommand) => void;
   level: number;
   isDebugMode?: boolean;
   onToggleBreakpoint?: (id: string) => void;
   onUpdateCommand?: (id: string, updates: Partial<Command>) => void;
   isFolded?: boolean;
+  currentCommandId?: string | null;
 }
 
 const ChildrenDropZone: React.FC<ChildrenDropZoneProps> = ({
@@ -37,24 +39,14 @@ const ChildrenDropZone: React.FC<ChildrenDropZoneProps> = ({
   onToggleBreakpoint,
   onUpdateCommand,
   isFolded = false,
+  currentCommandId = null,
 }) => {
   const [{ isOver }, drop] = useDrop<{ command: Command; isFromPanel: boolean }, void, { isOver: boolean }>({
     accept: "command",
     drop: (item, monitor) => {
-      if (monitor.didDrop()) {
-        console.log("🚫 ChildrenDropZone drop skipped (already handled)", {
-          parentType: parentCommand.type,
-        });
-        return;
-      }
+      if (monitor.didDrop()) return;
 
       if (item.isFromPanel && onAddChild) {
-        console.log("📥 ChildrenDropZone drop:", {
-          parentType: parentCommand.type,
-          childType: item.command.type,
-          branch: "children",
-          level,
-        });
         playCollectSound();
         onAddChild(parentCommand.id, item.command, "children");
       }
@@ -88,6 +80,9 @@ const ChildrenDropZone: React.FC<ChildrenDropZoneProps> = ({
           <CommandBlock
             key={child.id}
             command={child}
+            parentId={parentCommand.id}
+            branch="children"
+            currentCommandId={currentCommandId}
             onRemove={onRemove}
             onAddChild={onAddChild}
             onCopy={onCopy}
@@ -118,9 +113,10 @@ interface ElseBranchDropZoneProps {
   onCopy?: (command: Command) => void;
   onMoveUp?: (id: string) => void;
   onMoveDown?: (id: string) => void;
-  onDropBefore?: (index: number, draggedItem: { command: Command; isFromPanel: boolean }) => void;
-  onDropAfter?: (index: number, draggedItem: { command: Command; isFromPanel: boolean }) => void;
+  onDropBefore?: (location: CommandLocation, draggedItem: DraggedCommand) => void;
+  onDropAfter?: (location: CommandLocation, draggedItem: DraggedCommand) => void;
   onUpdateCommand?: (id: string, updates: Partial<Command>) => void;
+  currentCommandId?: string | null;
 }
 
 const ElseBranchDropZone: React.FC<ElseBranchDropZoneProps> = ({
@@ -136,24 +132,14 @@ const ElseBranchDropZone: React.FC<ElseBranchDropZoneProps> = ({
   onDropBefore,
   onDropAfter,
   onUpdateCommand,
+  currentCommandId = null,
 }) => {
   const [{ isOver }, drop] = useDrop<{ command: Command; isFromPanel: boolean }, void, { isOver: boolean }>({
     accept: "command",
     drop: (item, monitor) => {
-      if (monitor.didDrop()) {
-        console.log("🚫 ElseBranchDropZone drop skipped (already handled)", {
-          parentType: command.type,
-        });
-        return;
-      }
+      if (monitor.didDrop()) return;
 
       if (item.isFromPanel && onAddChild) {
-        console.log("📥 ElseBranchDropZone drop:", {
-          parentType: command.type,
-          childType: item.command.type,
-          branch: "elseChildren",
-          level,
-        });
         playCollectSound();
         onAddChild(command.id, item.command, "elseChildren");
       }
@@ -188,6 +174,9 @@ const ElseBranchDropZone: React.FC<ElseBranchDropZoneProps> = ({
         <CommandBlock
           key={child.id}
           command={child}
+          parentId={command.id}
+          branch="elseChildren"
+          currentCommandId={currentCommandId}
           onRemove={onRemove}
           onAddChild={onAddChild}
           onCopy={onCopy}
@@ -223,9 +212,12 @@ export interface CommandBlockProps {
   onToggleBreakpoint?: (id: string) => void;
   index?: number;
   total?: number;
-  onDropBefore?: (index: number, draggedItem: { command: Command; isFromPanel: boolean }) => void;
-  onDropAfter?: (index: number, draggedItem: { command: Command; isFromPanel: boolean }) => void;
+  onDropBefore?: (location: CommandLocation, draggedItem: DraggedCommand) => void;
+  onDropAfter?: (location: CommandLocation, draggedItem: DraggedCommand) => void;
   onUpdateCommand?: (id: string, updates: Partial<Command>) => void;
+  parentId?: string | null;
+  branch?: CommandBranch;
+  currentCommandId?: string | null;
 }
 
 const CommandBlock: React.FC<CommandBlockProps> = React.memo(
@@ -247,19 +239,21 @@ const CommandBlock: React.FC<CommandBlockProps> = React.memo(
     onDropBefore,
     onDropAfter,
     onUpdateCommand,
+    parentId = null,
+    branch = "children",
+    currentCommandId = null,
   }) => {
     const [isFolded, setIsFolded] = useState(false);
     const [isHovered, setIsHovered] = useState(false);
     const [dropPosition, setDropPosition] = useState<"before" | "after" | null>(null);
 
     const ref = useRef<HTMLDivElement>(null);
-    const blockRef = useRef<HTMLDivElement>(null);
 
     const [{ isDragging }, drag] = useDrag(() => ({
       type: "command",
       item: { command, isFromPanel },
-      collect: (monitor) => ({
-        isDragging: monitor.isDragging(),
+      collect: (_monitor) => ({
+        isDragging: _monitor.isDragging(),
       }),
     }));
 
@@ -287,13 +281,14 @@ const CommandBlock: React.FC<CommandBlockProps> = React.memo(
           setDropPosition("after");
         }
       },
-      drop: (item, monitor) => {
+      drop: (item, _monitor) => {
         if (!item.isFromPanel && dropPosition && onDropBefore && onDropAfter) {
           playClickSound();
+          const location: CommandLocation = { parentId, branch, index };
           if (dropPosition === "before") {
-            onDropBefore(index, item);
+            onDropBefore(location, item);
           } else {
-            onDropAfter(index, item);
+            onDropAfter(location, item);
           }
         }
       },
@@ -316,7 +311,7 @@ const CommandBlock: React.FC<CommandBlockProps> = React.memo(
     }, [drop]);
 
     const getBlockStyleClass = () => {
-      let classNames = [styles.commandBlock];
+      let classNames: string[] = [];
       switch (command.type) {
         case "forward":
           classNames.push(styles.forward);
@@ -541,6 +536,7 @@ const CommandBlock: React.FC<CommandBlockProps> = React.memo(
               onToggleBreakpoint={onToggleBreakpoint}
               onUpdateCommand={onUpdateCommand}
               isFolded={isFolded}
+              currentCommandId={currentCommandId}
             />
 
             {!isFolded && command.type === "if" && (
@@ -559,6 +555,7 @@ const CommandBlock: React.FC<CommandBlockProps> = React.memo(
                   onDropBefore={onDropBefore}
                   onDropAfter={onDropAfter}
                   onUpdateCommand={onUpdateCommand}
+                  currentCommandId={currentCommandId}
                 />
               </>
             )}

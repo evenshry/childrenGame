@@ -177,7 +177,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@eslint/js@npm:8.57.1":
+"@eslint/js@npm:8.57.1, @eslint/js@npm:^8.57.1":
   version: 8.57.1
   resolution: "@eslint/js@npm:8.57.1"
   checksum: 10c0/b489c474a3b5b54381c62e82b3f7f65f4b8a5eaaed126546520bf2fede5532a8ed53212919fed1e9048dcf7f37167c8561d58d0ba4492a4244004e7793805223
@@ -703,24 +703,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/react-dnd-html5-backend@npm:^3.0.2":
-  version: 3.0.2
-  resolution: "@types/react-dnd-html5-backend@npm:3.0.2"
-  dependencies:
-    react-dnd-html5-backend: "npm:*"
-  checksum: 10c0/85cec8edc481fd613cb1b7d3da04b12edd061111dd6b2011869795a3d8dd9a5908d76c5eca6b4a443459d03284e5a745daa5e02828cba86dafad1444a97a00ba
-  languageName: node
-  linkType: hard
-
-"@types/react-dnd@npm:^3.0.2":
-  version: 3.0.2
-  resolution: "@types/react-dnd@npm:3.0.2"
-  dependencies:
-    react-dnd: "npm:*"
-  checksum: 10c0/a212106fe1316379aec9b4d71ec25fa7e1b0cc55e18c95ef43a55eb37ce77a6f6d182f68e78d0ca4e05beefe2b080863648a6f8316c21379b86ab45d82fce26a
-  languageName: node
-  linkType: hard
-
 "@types/react-dom@npm:^18.2.17":
   version: 18.3.7
   resolution: "@types/react-dom@npm:18.3.7"
@@ -1116,10 +1098,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "children-game@workspace:."
   dependencies:
+    "@eslint/js": "npm:^8.57.1"
     "@types/node": "npm:^25.9.1"
     "@types/react": "npm:^18.2.43"
-    "@types/react-dnd": "npm:^3.0.2"
-    "@types/react-dnd-html5-backend": "npm:^3.0.2"
     "@types/react-dom": "npm:^18.2.17"
     "@typescript-eslint/eslint-plugin": "npm:^6.14.0"
     "@typescript-eslint/parser": "npm:^6.14.0"
@@ -1129,6 +1110,7 @@ __metadata:
     eslint: "npm:^8.55.0"
     eslint-plugin-react-hooks: "npm:^4.6.0"
     eslint-plugin-react-refresh: "npm:^0.4.5"
+    globals: "npm:^13.24.0"
     react: "npm:^18.2.0"
     react-dnd: "npm:^16.0.1"
     react-dnd-html5-backend: "npm:^16.0.1"
@@ -1716,7 +1698,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"globals@npm:^13.19.0":
+"globals@npm:^13.19.0, globals@npm:^13.24.0":
   version: 13.24.0
   resolution: "globals@npm:13.24.0"
   dependencies:
@@ -2933,7 +2915,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-dnd-html5-backend@npm:*, react-dnd-html5-backend@npm:^16.0.1":
+"react-dnd-html5-backend@npm:^16.0.1":
   version: 16.0.1
   resolution: "react-dnd-html5-backend@npm:16.0.1"
   dependencies:
@@ -2942,7 +2924,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-dnd@npm:*, react-dnd@npm:^16.0.1":
+"react-dnd@npm:^16.0.1":
   version: 16.0.1
   resolution: "react-dnd@npm:16.0.1"
   dependencies:

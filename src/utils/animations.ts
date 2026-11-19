@@ -1,4 +1,7 @@
 // 动画工具函数和音效系统
+/// <reference lib="dom" />
+import type { MouseEvent as ReactMouseEvent } from 'react';
+import { settingsStorage } from './storage';
 
 export type AnimationType = 'bounce' | 'shake' | 'pulse' | 'wiggle' | 'flip' | 'pop';
 
@@ -8,15 +11,37 @@ export interface AnimationConfig {
   easing?: string;
 }
 
-export const playSound = (soundType: 'success' | 'error' | 'click' | 'collect' | 'move' | 'levelUp'): void => {
+let audioContext: AudioContext | null = null;
+
+const getAudioContext = (): AudioContext | null => {
+  if (typeof window === 'undefined') return null;
+  if (!audioContext) {
+    const AudioContextCtor =
+      window.AudioContext ||
+      (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) return null;
+    audioContext = new AudioContextCtor();
+  }
+  if (audioContext.state === 'suspended') {
+    void audioContext.resume();
+  }
+  return audioContext;
+};
+
+export const playSound = (
+  soundType: 'success' | 'error' | 'click' | 'collect' | 'move' | 'levelUp',
+): void => {
   if (typeof window === 'undefined') return;
-  
-  const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  const oscillator = audioContext.createOscillator();
-  const gainNode = audioContext.createGain();
+  if (!settingsStorage.get().soundEnabled) return;
+
+  const context = getAudioContext();
+  if (!context) return;
+
+  const oscillator = context.createOscillator();
+  const gainNode = context.createGain();
 
   oscillator.connect(gainNode);
-  gainNode.connect(audioContext.destination);
+  gainNode.connect(context.destination);
 
   const soundConfigs: Record<typeof soundType, { frequency: number; duration: number; type: OscillatorType }> = {
     success: { frequency: 523.25, duration: 0.3, type: 'sine' },
@@ -28,15 +53,19 @@ export const playSound = (soundType: 'success' | 'error' | 'click' | 'collect' |
   };
 
   const config = soundConfigs[soundType];
-  
-  oscillator.frequency.setValueAtTime(config.frequency, audioContext.currentTime);
-  oscillator.type = config.type;
-  
-  gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-  gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + config.duration);
 
-  oscillator.start(audioContext.currentTime);
-  oscillator.stop(audioContext.currentTime + config.duration);
+  oscillator.frequency.setValueAtTime(config.frequency, context.currentTime);
+  oscillator.type = config.type;
+
+  gainNode.gain.setValueAtTime(0.3, context.currentTime);
+  gainNode.gain.exponentialRampToValueAtTime(0.01, context.currentTime + config.duration);
+
+  oscillator.start(context.currentTime);
+  oscillator.stop(context.currentTime + config.duration);
+  oscillator.onended = () => {
+    oscillator.disconnect();
+    gainNode.disconnect();
+  };
 };
 
 export const playSuccessSound = (): void => {
@@ -121,8 +150,8 @@ export const animateElement = (
   };
 };
 
-export const createRipple = (event: React.MouseEvent<HTMLElement>): void => {
-  const button = event.currentTarget;
+export const createRipple = (event: ReactMouseEvent): void => {
+  const button = event.currentTarget as HTMLElement;
   const circle = document.createElement('span');
   const diameter = Math.max(button.clientWidth, button.clientHeight);
   const radius = diameter / 2;
@@ -276,8 +305,6 @@ export const celebrateWin = (element: HTMLElement): void => {
 
     const angle = Math.random() * Math.PI * 2;
     const velocity = 100 + Math.random() * 200;
-    const startX = element.offsetWidth / 2;
-    const startY = element.offsetHeight / 2;
 
     particle.animate(
       [

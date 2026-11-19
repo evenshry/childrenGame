@@ -17,11 +17,11 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
   const [visibleLogs, setVisibleLogs] = useState<LogEntry[]>([]);
   const [filter, setFilter] = useState<'all' | 'info' | 'success' | 'error'>('all');
   const [isAutoScroll, setIsAutoScroll] = useState(true);
+  const [clearedCount, setClearedCount] = useState(0);
 
   useEffect(() => {
-    const newLogs: LogEntry[] = logs.map((log, index) => {
+    const newLogs: LogEntry[] = logs.slice(clearedCount).map((log, index) => {
       let type: LogEntry['type'] = 'info';
-      let message = log;
       
       if (log.includes('成功') || log.includes('过关') || log.includes('完成')) {
         type = 'success';
@@ -34,7 +34,7 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
       }
       
       return {
-        id: `log_${Date.now()}_${index}`,
+        id: `log_${clearedCount + index}_${log}`,
         message: log,
         type,
         timestamp: Date.now(),
@@ -42,7 +42,11 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
     });
     
     setVisibleLogs(newLogs);
-  }, [logs]);
+  }, [logs, clearedCount]);
+
+  useEffect(() => {
+    if (logs.length === 0) setClearedCount(0);
+  }, [logs.length]);
 
   useEffect(() => {
     if (logContainerRef.current && isAutoScroll) {
@@ -80,6 +84,7 @@ const LogPanel: React.FC<LogPanelProps> = ({ logs }) => {
 
   const clearLogs = () => {
     setVisibleLogs([]);
+    setClearedCount(logs.length);
   };
 
   return (

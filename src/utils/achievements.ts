@@ -1,7 +1,8 @@
-import { Achievement } from '@/types/global';
+import { Achievement, AchievementType } from '@/types/global';
+import type { PlayerStats } from './storage';
 
 export interface AchievementDefinition {
-  id: string;
+  id: AchievementType;
   name: string;
   description: string;
   icon: string;
@@ -11,18 +12,7 @@ export interface AchievementDefinition {
   points: number;
 }
 
-export interface PlayerStats {
-  totalLevelsCompleted: number;
-  totalStarsCollected: number;
-  totalCommandsUsed: number;
-  perfectLevels: number;
-  speedRuns: number;
-  consecutiveDays: number;
-  customLevelsCreated: number;
-  programsSaved: number;
-  hintsUsed: number;
-  achievementsUnlocked: number;
-}
+export type { PlayerStats };
 
 export const achievementDefinitions: AchievementDefinition[] = [
   {
@@ -104,6 +94,7 @@ export const achievementDefinitions: AchievementDefinition[] = [
     icon: '🧠',
     category: 'intermediate',
     points: 35,
+    hidden: true, // incrementHintUsage 尚未被调用，暂不开放
     condition: (stats) => stats.hintsUsed === 0 && stats.totalLevelsCompleted >= 5,
   },
   {
@@ -151,7 +142,7 @@ export const checkAchievements = (stats: PlayerStats): Achievement[] => {
     if (def.condition(stats)) {
       unlockedAchievements.push({
         id: def.id,
-        type: def.id as any,
+        type: def.id,
         name: def.name,
         description: def.description,
         icon: def.icon,

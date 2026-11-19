@@ -1,7 +1,8 @@
-import React, { useEffect } from "react";
+import React from "react";
 import { useDrop } from "react-dnd";
 import CommandBlock from "@/components/CommandBlock";
-import { Command, DebugStep } from "@/types/global";
+import { Command } from "@/types/global";
+import type { CommandLocation, DraggedCommand } from "@/utils/commandTree";
 import styles from "./index.module.scss";
 
 export interface CommandsContainerProps {
@@ -12,14 +13,13 @@ export interface CommandsContainerProps {
   onCopyCommand?: (command: Command) => void;
   onMoveUp?: (id: string) => void;
   onMoveDown?: (id: string) => void;
-  onDropBefore?: (index: number, draggedItem: { command: Command; isFromPanel: boolean }) => void;
-  onDropAfter?: (index: number, draggedItem: { command: Command; isFromPanel: boolean }) => void;
+  onDropBefore?: (location: CommandLocation, draggedItem: DraggedCommand) => void;
+  onDropAfter?: (location: CommandLocation, draggedItem: DraggedCommand) => void;
   isDebugMode?: boolean;
-  currentStep?: number;
-  debugSteps?: DebugStep[];
   breakpoints?: string[];
   onToggleBreakpoint?: (id: string) => void;
   onUpdateCommand?: (id: string, updates: Partial<Command>) => void;
+  currentCommandId?: string | null;
 }
 
 const CommandsContainer: React.FC<CommandsContainerProps> = React.memo(
@@ -34,25 +34,16 @@ const CommandsContainer: React.FC<CommandsContainerProps> = React.memo(
     onDropBefore,
     onDropAfter,
     isDebugMode = false,
-    currentStep = 0,
-    debugSteps = [],
     breakpoints = [],
     onToggleBreakpoint,
     onUpdateCommand,
+    currentCommandId = null,
   }) => {
-    const [{ isOver }, drop] = useDrop<{ command: Command; isFromPanel: boolean }, void, { isOver: boolean }>({
+    const [{ isOver }, drop] = useDrop<DraggedCommand, void, { isOver: boolean }>({
       accept: "command",
       drop: (item, monitor) => {
-        if (monitor.didDrop()) {
-          console.log('🚫 CommandsContainer drop skipped (already handled)');
-          return;
-        }
-        
+        if (monitor.didDrop()) return;
         if (item.isFromPanel && monitor.isOver({ shallow: true })) {
-          console.log('📥 CommandsContainer drop:', {
-            commandType: item.command.type,
-            level: 'root',
-          });
           onAddCommand(item.command);
         }
       },
@@ -61,39 +52,31 @@ const CommandsContainer: React.FC<CommandsContainerProps> = React.memo(
       }),
     });
 
-    useEffect(() => {
-      console.log("commands list", JSON.stringify(commands));
-    }, [commands]);
-
     return (
       <div ref={drop} className={`${styles.commandsContainer} ${isOver ? styles.dropOver : ""}`}>
-        {commands.map((command, index) => {
-          // 检查是否是当前执行步骤
-          const isCurrentStep = debugSteps.some((step) => step.command.id === command.id && step.index === currentStep);
-          // 检查是否有断点
-          const hasBreakpoint = breakpoints.includes(command.id);
-
-          return (
-            <CommandBlock
-              key={command.id}
-              command={command}
-              onRemove={onRemoveCommand}
-              onAddChild={onAddChild}
-              onCopy={onCopyCommand}
-              onMoveUp={onMoveUp}
-              onMoveDown={onMoveDown}
-              isDebugMode={isDebugMode}
-              isCurrentStep={isCurrentStep}
-              hasBreakpoint={hasBreakpoint}
-              onToggleBreakpoint={onToggleBreakpoint}
-              index={index}
-              total={commands.length}
-              onDropBefore={onDropBefore}
-              onDropAfter={onDropAfter}
-              onUpdateCommand={onUpdateCommand}
-            />
-          );
-        })}
+        {commands.map((command, index) => (
+          <CommandBlock
+            key={command.id}
+            command={command}
+            parentId={null}
+            branch="children"
+            onRemove={onRemoveCommand}
+            onAddChild={onAddChild}
+            onCopy={onCopyCommand}
+            onMoveUp={onMoveUp}
+            onMoveDown={onMoveDown}
+            isDebugMode={isDebugMode}
+            isCurrentStep={currentCommandId === command.id}
+            currentCommandId={currentCommandId}
+            hasBreakpoint={breakpoints.includes(command.id)}
+            onToggleBreakpoint={onToggleBreakpoint}
+            index={index}
+            total={commands.length}
+            onDropBefore={onDropBefore}
+            onDropAfter={onDropAfter}
+            onUpdateCommand={onUpdateCommand}
+          />
+        ))}
       </div>
     );
   },

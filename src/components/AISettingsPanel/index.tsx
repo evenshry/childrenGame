@@ -1,19 +1,19 @@
-import React, { useState } from 'react';
-import { Drawer, Switch, Select, InputNumber, Button, Divider, Typography, Space, Modal, Input, Alert, message } from 'antd';
-import { RocketOutlined, BulbOutlined, ReloadOutlined, QuestionCircleOutlined, HistoryOutlined, KeyOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons';
+import React, { useEffect, useState } from 'react';
+import { Drawer, Switch, InputNumber, Button, Divider, Typography, Space, Modal, Input, Alert, message } from 'antd';
+import { RocketOutlined, BulbOutlined, ReloadOutlined, QuestionCircleOutlined, HistoryOutlined, KeyOutlined } from '@ant-design/icons';
 import { useAIStore, hasApiKey } from '@/store/aiStore';
+import type { LevelGenResult, SolverResult } from '@/api/qianwen/types';
 import AIHelp from './AIHelp';
 import AIHistoryViewer from './AIHistoryViewer';
 import styles from './index.module.scss';
 
 const { Title, Text } = Typography;
-const { Option } = Select;
 
 interface AISettingsPanelProps {
   open: boolean;
   onClose: () => void;
-  onUseLevelResult?: (result: any) => void;
-  onUseSolverResult?: (result: any) => void;
+  onUseLevelResult?: (result: LevelGenResult) => void;
+  onUseSolverResult?: (result: SolverResult) => void;
 }
 
 const AISettingsPanel: React.FC<AISettingsPanelProps> = ({ 
@@ -31,14 +31,25 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
     updateSettings,
     resetDailyUsage,
   } = useAIStore();
+  const [apiKeyInput, setApiKeyInput] = useState(settings.apiKey);
+  const [apiBaseUrlInput, setApiBaseUrlInput] = useState(settings.apiBaseUrl);
+
+  useEffect(() => {
+    if (open) {
+      setApiKeyInput(settings.apiKey);
+      setApiBaseUrlInput(settings.apiBaseUrl);
+    }
+  }, [open, settings.apiKey, settings.apiBaseUrl]);
 
   const usagePercentage = Math.min(100, (usage.todayTokens / settings.dailyTokenLimit) * 100);
   const apiKeyConfigured = hasApiKey();
 
   const handleSaveApiKey = () => {
-    if (settings.apiKey && settings.apiKey.trim()) {
-      message.success('API Key 已保存');
-    }
+    updateSettings({
+      apiKey: apiKeyInput.trim(),
+      apiBaseUrl: apiBaseUrlInput.trim(),
+    });
+    message.success('API 配置已保存');
   };
 
   return (
@@ -93,8 +104,8 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
             </div>
             <Input.Password
               placeholder="请输入 API Key (sk-...)"
-              value={settings.apiKey}
-              onChange={(e) => updateSettings({ apiKey: e.target.value })}
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
               visibilityToggle={{
                 visible: showApiKey,
                 onVisibleChange: setShowApiKey,
@@ -103,8 +114,8 @@ const AISettingsPanel: React.FC<AISettingsPanelProps> = ({
             />
             <Input
               placeholder="API Base URL (可选)"
-              value={settings.apiBaseUrl}
-              onChange={(e) => updateSettings({ apiBaseUrl: e.target.value })}
+              value={apiBaseUrlInput}
+              onChange={(e) => setApiBaseUrlInput(e.target.value)}
               style={{ width: '100%' }}
             />
             <Button type="primary" onClick={handleSaveApiKey} style={{ width: '100%' }}>

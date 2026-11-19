@@ -1,245 +1,182 @@
 import { useState } from 'react';
 import { solveLevel, getApiErrorMessage } from '@/api/qianwen';
+import { parseAIJson, getResponseTokens, isRecord, isNotNull } from '@/api/qianwen/response';
 import { useAIStore } from '@/store/aiStore';
-import { SolverRequest, SolverResult } from '@/api/qianwen/types';
+import type {
+  SolverCommand,
+  SolverRequest,
+  SolverResult,
+} from '@/api/qianwen/types';
 import { findOptimalPath, validatePath } from '@/utils/pathFinder';
-import { MapData, Cell, CellType, Command, CommandType } from '@/types/global';
+import type {
+  Cell,
+  CellType,
+  Command,
+  CommandType,
+  Direction,
+  MapData,
+} from '@/types/global';
+import { generateId } from '@/utils/id';
 
-// 生成唯一ID
-const generateCommandId = () => `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+const VALID_COMMAND_TYPES: CommandType[] = [
+  'forward',
+  'left',
+  'right',
+  'collect',
+  'loop',
+  'if',
+  'repeatUntil',
+  'wait',
+  'randomTurn',
+];
 
-export const validateSolverResult = (result: any): result is SolverResult => {
-  if (!result || typeof result !== 'object') return false;
-  if (!Array.isArray(result.commands)) return false;
-  if (!result.explanation || typeof result.explanation !== 'string') return false;
-  return true;
+export const validateSolverResult = (value: unknown): value is SolverResult =>
+  isRecord(value) &&
+  Array.isArray(value.commands) &&
+  typeof value.explanation === 'string';
+
+const sanitizeCommand = (value: unknown): SolverCommand | null => {
+  if (!isRecord(value)) return null;
+  const type = value.type;
+  if (typeof type !== 'string' || !VALID_COMMAND_TYPES.includes(type as CommandType)) {
+    return null;
+  }
+
+  const params = isRecord(value.params)
+    ? (value.params as SolverCommand['params'])
+    : undefined;
+  const children = Array.isArray(value.children)
+    ? value.children.map(sanitizeCommand).filter(isNotNull)
+    : undefined;
+  const elseChildren = Array.isArray(value.elseChildren)
+    ? value.elseChildren.map(sanitizeCommand).filter(isNotNull)
+    : undefined;
+
+  return { type, params, children, elseChildren };
 };
 
-// 从完整Command转换为SolverResult的简单命令类型
-const toSimpleCommand = (cmd: Command): any => ({
-  type: cmd.type,
-  params: cmd.params
+export const sanitizeSolverResult = (result: SolverResult): SolverResult => ({
+  commands: result.commands.map(sanitizeCommand).filter(isNotNull).slice(0, 200),
+  explanation: result.explanation.slice(0, 500),
 });
 
-// 从SolverResult的简单命令转换为完整Command
-const toFullCommand = (cmd: any): Command => ({
-  id: cmd.id || generateCommandId(),
-  type: cmd.type as CommandType,
-  params: cmd.params || {}
+const toSimpleCommand = (command: Command): SolverCommand => ({
+  type: command.type,
+  params: command.params,
+  children: command.children?.map(toSimpleCommand),
+  elseChildren: command.elseChildren?.map(toSimpleCommand),
 });
 
-export const sanitizeSolverResult = (result: SolverResult): SolverResult => {
-  const validCommandTypes = ['forward', 'left', 'right', 'collect', 'loop', 'if', 'repeatUntil', 'wait', 'randomTurn'];
-  
-  const sanitizeCommand = (cmd: any): any => {
-    if (!cmd || typeof cmd !== 'object') return null;
-    if (!validCommandTypes.includes(cmd.type)) return null;
-    
-    const sanitized: any = {
-      type: cmd.type,
-      params: cmd.params || {}
-    };
-    
-    // 递归处理子指令
-    if (cmd.children && Array.isArray(cmd.children)) {
-      sanitized.children = cmd.children.map(sanitizeCommand).filter(Boolean);
-    }
-    
-    // 递归处理else子指令
-    if (cmd.elseChildren && Array.isArray(cmd.elseChildren)) {
-      sanitized.elseChildren = cmd.elseChildren.map(sanitizeCommand).filter(Boolean);
-    }
-    
-    return sanitized;
-  };
-  
-  return {
-    commands: (result.commands || []).map(sanitizeCommand).filter(Boolean).slice(0, 200),
-    explanation: result.explanation.slice(0, 500),
-  };
-};
+const toFullCommand = (command: SolverCommand): Command => ({
+  id: generateId(),
+  type: command.type as CommandType,
+  params: command.params as Command['params'],
+  children: command.children?.map(toFullCommand),
+  elseChildren: command.elseChildren?.map(toFullCommand),
+});
 
-const generateId = () => {
-  return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-};
+const toCommands = (result: SolverResult): Command[] =>
+  result.commands.map(toFullCommand);
 
-// 将 SolverRequest 转换为 MapData
 const convertToMapData = (request: SolverRequest): MapData => {
-  // 转换单元格
-  const cells: Cell[] = request.map.cells.map(cell => ({
-    ...cell,
-    type: cell.type as CellType
+  const cells: Cell[] = request.map.cells.map((cell) => ({
+    x: cell.x,
+    y: cell.y,
+    type: cell.type as CellType,
   }));
-  
-  // 添加机器人和终点
   cells.push({
     x: request.startX,
     y: request.startY,
-    type: 'robot' as CellType,
-    dir: request.startDir as 'up' | 'down' | 'left' | 'right'
+    type: 'robot',
+    dir: request.startDir as Direction,
   });
-  cells.push({
-    x: request.goalX,
-    y: request.goalY,
-    type: 'goal' as CellType
-  });
-  
-  // 转换星星
-  const stars: Cell[] = request.map.stars.map(star => ({
-    x: star.x,
-    y: star.y,
-    type: 'star' as CellType
-  }));
-  
+  cells.push({ x: request.goalX, y: request.goalY, type: 'goal' });
+
   return {
     width: request.map.width,
     height: request.map.height,
     cells,
-    stars
+    stars: request.map.stars.map((star) => ({
+      x: star.x,
+      y: star.y,
+      type: 'star' as CellType,
+    })),
   };
 };
 
 export const useAIAutoSolver = () => {
-  const { 
-    setIsGenerating, 
-    addHistoryEntry,
-    settings,
-    isDailyLimitReached 
-  } = useAIStore();
+  const { setIsGenerating, addHistoryEntry, settings, isDailyLimitReached } =
+    useAIStore();
   const [error, setError] = useState<string | null>(null);
 
   const solve = async (request: SolverRequest): Promise<SolverResult | null> => {
-    const entryId = generateId();
+    const entryId = generateId('solve');
     const startTime = Date.now();
     let tokensUsed = 0;
-    let rawResponse: any = null;
+    let rawResponse: unknown = null;
+
+    const recordFailure = (errorMsg: string) => {
+      setError(errorMsg);
+      addHistoryEntry({
+        id: entryId,
+        type: 'solve',
+        timestamp: startTime,
+        tokensUsed,
+        success: false,
+        data: { request, result: null, rawResponse },
+        error: errorMsg,
+      });
+    };
 
     if (!settings.enableAutoSolve) {
-      const errorMsg = '自动解题功能已禁用';
-      setError(errorMsg);
-      addHistoryEntry({
-        id: entryId,
-        type: 'solve',
-        timestamp: startTime,
-        tokensUsed: 0,
-        success: false,
-        data: { request, result: null, rawResponse },
-        error: errorMsg,
-      });
+      recordFailure('自动解题功能已禁用');
       return null;
     }
-    
     if (isDailyLimitReached()) {
-      const errorMsg = '今日 Token 使用已达上限，请明天再试';
-      setError(errorMsg);
-      addHistoryEntry({
-        id: entryId,
-        type: 'solve',
-        timestamp: startTime,
-        tokensUsed: 0,
-        success: false,
-        data: { request, result: null, rawResponse },
-        error: errorMsg,
-      });
+      recordFailure('今日 Token 使用已达上限，请明天再试');
       return null;
     }
 
     setIsGenerating(true);
     setError(null);
-    
+
     try {
       const response = await solveLevel(request);
-      
-      // 保存原始响应数据
-      rawResponse = JSON.parse(JSON.stringify(response));
-      
-      // 安全地解析API响应
-      let content: string | undefined;
-      const output = response.output as any;
-      
-      // 尝试不同的响应格式
-      if (output?.text) {
-        // 主要格式：output.text
-        content = output.text;
-      } else if (output?.choices && Array.isArray(output.choices) && output.choices.length > 0) {
-        // 兼容格式：output.choices[0].message.content
-        content = output.choices[0]?.message?.content;
-      } else if (typeof output === 'string') {
-        // 字符串格式
-        content = output;
-      }
-      
-      // 去掉JSON代码块包装（如果存在）
-      if (content) {
-        content = content.trim();
-        // 去掉 ```json 和 ``` 包装
-        const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/);
-        if (jsonMatch) {
-          content = jsonMatch[1].trim();
-        }
-        // 也去掉普通的 ``` 包装
-        const codeMatch = content.match(/```\s*([\s\S]*?)\s*```/);
-        if (codeMatch) {
-          content = codeMatch[1].trim();
-        }
-      }
-      
-      tokensUsed = (response.usage?.input_tokens || 0) + (response.usage?.output_tokens || 0);
-      
-      if (!content) {
-        console.error('API响应格式:', JSON.stringify(response, null, 2));
-        throw new Error('AI 未返回内容或响应格式异常');
-      }
-      
-      let result;
-      try {
-        result = JSON.parse(content);
-      } catch (parseErr) {
-        console.error('JSON解析错误:', parseErr);
-        console.error('原始内容:', content);
-        throw new Error('AI 返回的格式无效，无法解析为JSON');
-      }
-      
-      if (!validateSolverResult(result)) {
-        console.error('验证失败的数据:', result);
+      rawResponse = response;
+      tokensUsed = getResponseTokens(response);
+      const parsed = parseAIJson(response);
+
+      if (!validateSolverResult(parsed)) {
         throw new Error('AI 返回的解题数据格式不正确');
       }
-      
-      const sanitized = sanitizeSolverResult(result);
-      
-      // 验证AI生成的路径是否有效
+
+      const sanitized = sanitizeSolverResult(parsed);
       const mapData = convertToMapData(request);
-      const fullCommandsForValidation = sanitized.commands.map(toFullCommand);
       const isValid = validatePath(
-        fullCommandsForValidation,
+        toCommands(sanitized),
         mapData,
         request.startX,
         request.startY,
-        request.startDir as any
+        request.startDir as Direction,
       );
-      
+
       let finalResult = sanitized;
-      
-      // 如果AI路径无效，使用本地算法
       if (!isValid) {
-        console.log('AI生成的路径无效，使用本地算法重新生成');
         const localCommands = findOptimalPath(
           mapData,
           request.startX,
           request.startY,
-          request.startDir as any
+          request.startDir as Direction,
         );
-        
-        if (localCommands.length > 0) {
-          finalResult = {
-            commands: localCommands.map(toSimpleCommand),
-            explanation: '使用本地路径规划算法生成的最优解'
-          };
-        } else {
+        if (localCommands.length === 0) {
           throw new Error('无法找到可行路径');
         }
+        finalResult = {
+          commands: localCommands.map(toSimpleCommand),
+          explanation: '使用本地路径规划算法生成的最优解',
+        };
       }
-      
+
       addHistoryEntry({
         id: entryId,
         type: 'solve',
@@ -248,56 +185,38 @@ export const useAIAutoSolver = () => {
         success: true,
         data: { request, result: finalResult, rawResponse },
       });
-      
       return finalResult;
     } catch (err) {
-      console.error('AI解题失败，尝试使用本地算法:', err);
-      
-      // AI失败时，尝试使用本地算法
+      // AI 失败时回退到本地寻路
       try {
         const mapData = convertToMapData(request);
         const localCommands = findOptimalPath(
           mapData,
           request.startX,
           request.startY,
-          request.startDir as any
+          request.startDir as Direction,
         );
-        
         if (localCommands.length > 0) {
           const fallbackResult: SolverResult = {
             commands: localCommands.map(toSimpleCommand),
-            explanation: 'AI解题失败，使用本地路径规划算法生成的最优解'
+            explanation: 'AI解题失败，使用本地路径规划算法生成的最优解',
           };
-          
           addHistoryEntry({
             id: entryId,
             type: 'solve',
             timestamp: startTime,
             tokensUsed,
             success: true,
-            data: { request, result: fallbackResult, rawResponse: 'local_fallback' },
+            data: { request, result: fallbackResult, rawResponse },
           });
-          
           setError(null);
           return fallbackResult;
         }
       } catch (fallbackErr) {
         console.error('本地算法也失败了:', fallbackErr);
       }
-      
-      const errorMsg = getApiErrorMessage(err);
-      setError(errorMsg);
-      
-      addHistoryEntry({
-        id: entryId,
-        type: 'solve',
-        timestamp: startTime,
-        tokensUsed,
-        success: false,
-        data: { request, result: null, rawResponse },
-        error: errorMsg,
-      });
-      
+
+      recordFailure(getApiErrorMessage(err));
       return null;
     } finally {
       setIsGenerating(false);

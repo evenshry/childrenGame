@@ -1,28 +1,11 @@
 import axios, { AxiosError } from 'axios';
-import { QianWenResponse, LevelGenRequest, SolverRequest } from './types';
+import type { QianWenResponse, LevelGenRequest, SolverRequest } from './types';
 import { levelGenSystemPrompt, levelGenUserPrompt, solverSystemPrompt, solverUserPrompt } from './prompts';
-import { useAIStore, getApiKey, getApiBaseUrl, hasApiKey } from '@/store/aiStore';
-import { useModelStore } from '@/store/modelStore';
-import { message } from 'antd';
 
 const DEFAULT_RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 
-const getQianwenClient = () => {
-  const apiKey = getApiKey();
-  const baseUrl = getApiBaseUrl();
-  
-  return axios.create({
-    baseURL: baseUrl,
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
-    timeout: 30000,
-  });
-};
-
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const isRetryableError = (error: AxiosError): boolean => {
   if (!error.response) return true;
@@ -36,180 +19,176 @@ const withRetry = async <T>(
   delayMs: number = RETRY_DELAY_MS
 ): Promise<T> => {
   let lastError: Error | null = null;
-  
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn();
     } catch (error) {
       lastError = error as Error;
-      
       if (i === attempts - 1) break;
-      
       if (error instanceof AxiosError && isRetryableError(error)) {
         await delay(delayMs * (i + 1));
         continue;
       }
-      
       break;
     }
   }
-  
-  throw lastError;
-};
-
-const withModelSwitch = async <T>(
-  fn: (modelId: string) => Promise<T>,
-  options?: {
-    maxRetries?: number;
-    onSwitch?: (from: string, to: string) => void;
-  }
-): Promise<T> => {
-  const modelStore = useModelStore.getState();
-  const maxRetries = options?.maxRetries || 3;
-  let attempts = 0;
-  let lastError: Error | null = null;
-
-  while (attempts < maxRetries) {
-    try {
-      const currentModelId = modelStore.currentModelId;
-      const result = await fn(currentModelId);
-      modelStore.recordUsage();
-      return result;
-    } catch (error) {
-      lastError = error as Error;
-      attempts++;
-      
-      if (attempts >= maxRetries) {
-        break;
-      }
-
-      modelStore.recordError();
-
-      const errorType = getErrorType(lastError);
-      const shouldSwitch = modelStore.switchConfig.enabled && (
-        modelStore.switchConfig.fallbackOnError || 
-        errorType === 'quota_exceeded' ||
-        errorType === 'rate_limit'
-      );
-
-      if (shouldSwitch) {
-        const previousModelId = modelStore.currentModelId;
-        const availableModels = modelStore.getAvailableFallback();
-        
-        if (availableModels.length > 0) {
-          const nextModel = availableModels[0];
-          modelStore.setCurrentModel(nextModel.id);
-          options?.onSwitch?.(previousModelId, nextModel.id);
-          message.info(`已切换到备用模型: ${nextModel.name}`);
-        } else {
-          message.error('所有备用模型都不可用');
-          break;
-        }
-      } else {
-        await delay(modelStore.switchConfig.retryDelayMs * attempts);
-      }
-    }
-  }
-
   throw lastError;
 };
 
 const getErrorType = (error: Error): string | undefined => {
-  const errorMsg = error.message.toLowerCase();
-  
-  if (errorMsg.includes('quota') || errorMsg.includes('额度')) return 'quota_exceeded';
-  if (errorMsg.includes('rate limit') || errorMsg.includes('频率')) return 'rate_limit';
-  if (errorMsg.includes('balance') || errorMsg.includes('余额')) return 'insufficient_balance';
-  if (errorMsg.includes('model not found') || errorMsg.includes('模型不存在')) return 'model_not_found';
-  if (errorMsg.includes('access denied') || errorMsg.includes('权限')) return 'access_denied';
-  if (errorMsg.includes('invalid api key') || errorMsg.includes('密钥无效')) return 'invalid_api_key';
-  
+  const msg = error.message.toLowerCase();
+  if (msg.includes('quota') || msg.includes('额度')) return 'quota_exceeded';
+  if (msg.includes('rate limit') || msg.includes('频率')) return 'rate_limit';
+  if (msg.includes('balance') || msg.includes('余额')) return 'insufficient_balance';
+  if (msg.includes('model not found') || msg.includes('模型不存在')) return 'model_not_found';
+  if (msg.includes('access denied') || msg.includes('权限')) return 'access_denied';
+  if (msg.includes('invalid api key') || msg.includes('密钥无效')) return 'invalid_api_key';
   return undefined;
 };
 
-export const generateLevel = async (request: LevelGenRequest): Promise<QianWenResponse> => {
-  if (!hasApiKey()) {
+/** 外部注入的依赖，让 API 层不直接 import Store */
+export interface ApiRuntime {
+  getApiKey: () => string;
+  getApiBaseUrl: () => string;
+  hasApiKey: () => boolean;
+  /** 成功后上报 token 用量 */
+  onUsageUpdate?: (input: number, output: number) => void;
+  /** 当前模型 ID 读取（给 solveLevel 用） */
+  getCurrentModelId?: () => string;
+  /** 模型自动切换相关 */
+  getModelSwitchState?: () => {
+    enabled: boolean;
+    fallbackOnError: boolean;
+    fallbackOnQuotaExceeded: boolean;
+    retryDelayMs: number;
+    /** 仅需要 { id, name } 即可 */
+    availableFallback: Array<{ id: string; name: string }>;
+  };
+  switchToNextModel?: () => { from: string; to: string } | null;
+  recordUsage?: () => void;
+  recordError?: () => void;
+}
+
+let runtime: ApiRuntime | null = null;
+
+/** 在应用初始化时注册依赖注入 */
+export const registerApiRuntime = (rt: ApiRuntime) => {
+  runtime = rt;
+};
+
+const getClient = () => {
+  const key = runtime?.getApiKey() || '';
+  const baseUrl = runtime?.getApiBaseUrl() || '';
+  return axios.create({
+    baseURL: baseUrl,
+    headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    timeout: 30000,
+  });
+};
+
+/** 生成关卡（强制使用 qwen-turbo 或当前模型，保留简单重试） */
+export const generateLevel = async (
+  request: LevelGenRequest,
+  modelId: string = 'qwen-turbo'
+): Promise<QianWenResponse> => {
+  if (!runtime?.hasApiKey()) {
     throw new Error('请先配置 API Key');
   }
-  
-  const client = getQianwenClient();
-  
+
+  const client = getClient();
+
   return withRetry(async () => {
     const response = await client.post('', {
-      model: 'qwen-turbo',
+      model: modelId,
       input: {
         messages: [
-          {
-            role: 'system',
-            content: levelGenSystemPrompt.trim(),
-          },
-          {
-            role: 'user',
-            content: levelGenUserPrompt(request).trim(),
-          },
+          { role: 'system', content: levelGenSystemPrompt.trim() },
+          { role: 'user', content: levelGenUserPrompt(request).trim() },
         ],
       },
-      parameters: {
-        max_tokens: 2048,
-        temperature: 0.7,
-      },
+      parameters: { max_tokens: 2048, temperature: 0.7 },
     });
-    
-    useAIStore.getState().updateUsage(
+
+    runtime?.onUsageUpdate?.(
       response.data.usage?.input_tokens || 0,
       response.data.usage?.output_tokens || 0
     );
-    
+
     return response.data;
   });
 };
 
-export const solveLevel = async (request: SolverRequest): Promise<QianWenResponse> => {
-  if (!hasApiKey()) {
+/** 解题（带模型切换能力） */
+export const solveLevel = async (
+  request: SolverRequest,
+  options?: { maxRetries?: number }
+): Promise<QianWenResponse> => {
+  if (!runtime?.hasApiKey()) {
     throw new Error('请先配置 API Key');
   }
-  
-  return withModelSwitch(async (modelId: string) => {
-    const client = getQianwenClient();
-    
-    const response = await withRetry(async () => {
-      return await client.post('', {
-        model: modelId,
-        input: {
-          messages: [
-            {
-              role: 'system',
-              content: solverSystemPrompt.trim(),
-            },
-            {
-              role: 'user',
-              content: solverUserPrompt(request).trim(),
-            },
-          ],
-        },
-        parameters: {
-          max_tokens: 1024,
-          temperature: 0.3,
-        },
-      });
-    });
-    
-    useAIStore.getState().updateUsage(
-      response.data.usage?.input_tokens || 0,
-      response.data.usage?.output_tokens || 0
-    );
-    
-    return response.data;
-  });
+
+  const client = getClient();
+  const maxRetries = options?.maxRetries ?? 3;
+  let attempts = 0;
+  let lastError: Error | null = null;
+
+  while (attempts < maxRetries) {
+    const modelId = runtime?.getCurrentModelId?.() ?? 'qwen-turbo';
+    try {
+      const response = await withRetry(async () =>
+        client.post('', {
+          model: modelId,
+          input: {
+            messages: [
+              { role: 'system', content: solverSystemPrompt.trim() },
+              { role: 'user', content: solverUserPrompt(request).trim() },
+            ],
+          },
+          parameters: { max_tokens: 1024, temperature: 0.3 },
+        })
+      );
+
+      runtime?.onUsageUpdate?.(
+        response.data.usage?.input_tokens || 0,
+        response.data.usage?.output_tokens || 0
+      );
+      runtime?.recordUsage?.();
+      return response.data;
+    } catch (error) {
+      lastError = error as Error;
+      attempts++;
+      if (attempts >= maxRetries) break;
+
+      runtime?.recordError?.();
+      const errorType = getErrorType(lastError);
+      const switchState = runtime?.getModelSwitchState?.();
+
+      const shouldSwitch =
+        switchState?.enabled &&
+        (switchState.fallbackOnError ||
+          errorType === 'quota_exceeded' ||
+          errorType === 'rate_limit');
+
+      if (shouldSwitch) {
+        const switched = runtime?.switchToNextModel?.();
+        if (!switched) {
+          break; // 没有可用的备用模型
+        }
+      } else {
+        await delay((switchState?.retryDelayMs || 1000) * attempts);
+      }
+    }
+  }
+
+  throw lastError;
 };
 
 export const getApiErrorMessage = (error: unknown): string => {
   if (axios.isAxiosError(error)) {
     if (error.response) {
       const { status, data } = error.response;
-      const responseData = data as any;
-      
-      // 检查阿里云DashScope特定的错误格式
+      const responseData = data as { code?: string; message?: string };
+
       if (responseData?.code) {
         switch (responseData.code) {
           case 'InvalidApiKey':
@@ -226,7 +205,7 @@ export const getApiErrorMessage = (error: unknown): string => {
             return responseData.message || `API错误: ${responseData.code}`;
         }
       }
-      
+
       switch (status) {
         case 401:
           return 'API密钥无效，请检查配置';
@@ -246,10 +225,10 @@ export const getApiErrorMessage = (error: unknown): string => {
       return '网络连接失败，请检查网络';
     }
   }
-  
+
   if (error instanceof Error) {
     return error.message;
   }
-  
+
   return '发生未知错误';
 };

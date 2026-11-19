@@ -1,17 +1,26 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { ModelInfo, DEFAULT_MODEL_CONFIGS, getModelById } from '@/config/models';
-import { ModelManager, getModelManager, ModelSwitchConfig } from '@/utils/modelManager';
+
+export interface ModelSwitchConfig {
+  enabled: boolean;
+  maxRetries: number;
+  retryDelayMs: number;
+  fallbackOnError: boolean;
+  fallbackOnQuotaExceeded: boolean;
+}
+
+interface ModelUsage {
+  requestCount: number;
+  totalTokens: number;
+  errorCount: number;
+  lastUsed: number;
+}
 
 interface ModelState {
   currentModelId: string;
   fallbackModels: string[];
-  usage: Record<string, {
-    requestCount: number;
-    totalTokens: number;
-    errorCount: number;
-    lastUsed: number;
-  }>;
+  usage: Record<string, ModelUsage>;
   switchConfig: ModelSwitchConfig;
   isAutoSwitchEnabled: boolean;
 }
@@ -38,107 +47,71 @@ interface ModelActions {
 
 type ModelStore = ModelState & ModelActions;
 
-const loadInitialState = (): Partial<ModelState> => {
-  try {
-    const saved = localStorage.getItem('model_store');
-    if (saved) {
-      return JSON.parse(saved);
-    }
-  } catch (error) {
-    console.error('Failed to load model store:', error);
-  }
-  return {
-    currentModelId: DEFAULT_MODEL_CONFIGS.defaultModel,
-    fallbackModels: DEFAULT_MODEL_CONFIGS.fallbackModels,
-    usage: {},
-    switchConfig: {
-      enabled: true,
-      maxRetries: 3,
-      retryDelayMs: 1000,
-      fallbackOnError: true,
-      fallbackOnQuotaExceeded: true,
-    },
-    isAutoSwitchEnabled: true,
-  };
+const DEFAULT_SWITCH_CONFIG: ModelSwitchConfig = {
+  enabled: true,
+  maxRetries: 3,
+  retryDelayMs: 1000,
+  fallbackOnError: true,
+  fallbackOnQuotaExceeded: true,
 };
 
-const initialState = loadInitialState();
+const emptyUsage = (): ModelUsage => ({
+  requestCount: 0,
+  totalTokens: 0,
+  errorCount: 0,
+  lastUsed: 0,
+});
 
 export const useModelStore = create<ModelStore>()(
   devtools(
     persist(
       (set, get) => ({
-        currentModelId: initialState.currentModelId || DEFAULT_MODEL_CONFIGS.defaultModel,
-        fallbackModels: initialState.fallbackModels || DEFAULT_MODEL_CONFIGS.fallbackModels,
-        usage: initialState.usage || {},
-        switchConfig: initialState.switchConfig || {
-          enabled: true,
-          maxRetries: 3,
-          retryDelayMs: 1000,
-          fallbackOnError: true,
-          fallbackOnQuotaExceeded: true,
-        },
-        isAutoSwitchEnabled: initialState.isAutoSwitchEnabled ?? true,
+        currentModelId: DEFAULT_MODEL_CONFIGS.defaultModel,
+        fallbackModels: DEFAULT_MODEL_CONFIGS.fallbackModels,
+        usage: {},
+        switchConfig: DEFAULT_SWITCH_CONFIG,
+        isAutoSwitchEnabled: true,
 
         setCurrentModel: (modelId: string) => {
           const model = getModelById(modelId);
-          if (model) {
-            set({ currentModelId: modelId });
-            return true;
-          }
-          return false;
+          if (!model) return false;
+          set({ currentModelId: modelId });
+          return true;
         },
 
         getCurrentModel: () => {
           const state = get();
-          const model = getModelById(state.currentModelId);
-          if (model) return model;
-          
-          const defaultModel = getModelById(DEFAULT_MODEL_CONFIGS.defaultModel);
-          if (defaultModel) return defaultModel;
-          
-          return DEFAULT_MODEL_CONFIGS.models[0];
+          return (
+            getModelById(state.currentModelId) ??
+            getModelById(DEFAULT_MODEL_CONFIGS.defaultModel) ??
+            DEFAULT_MODEL_CONFIGS.models[0]
+          );
         },
 
-        getFallbackModels: () => {
-          const state = get();
-          return state.fallbackModels
-            .map(id => getModelById(id))
-            .filter((model): model is ModelInfo => model !== undefined);
-        },
+        getFallbackModels: () =>
+          get()
+            .fallbackModels.map((id) => getModelById(id))
+            .filter((model): model is ModelInfo => model !== undefined),
 
-        getAvailableFallback: () => {
-          const state = get();
-          return state.fallbackModels
-            .filter(id => id !== state.currentModelId)
-            .map(id => getModelById(id))
+        getAvailableFallback: () =>
+          get()
+            .fallbackModels.filter((id) => id !== get().currentModelId)
+            .map((id) => getModelById(id))
             .filter((model): model is ModelInfo => model !== undefined)
-            .filter(model => {
-              const usage = state.usage[model.id];
-              return !usage || usage.errorCount < 5;
-            });
-        },
+            .filter((model) => (get().usage[model.id]?.errorCount ?? 0) < 5),
 
         recordUsage: (tokens?: number) => {
-          const state = get();
-          const currentModelId = state.currentModelId;
+          const currentModelId = get().currentModelId;
           const now = Date.now();
-          
-          set((s) => {
-            const currentUsage = s.usage[currentModelId] || {
-              requestCount: 0,
-              totalTokens: 0,
-              errorCount: 0,
-              lastUsed: 0,
-            };
-            
+          set((state) => {
+            const current = state.usage[currentModelId] ?? emptyUsage();
             return {
               usage: {
-                ...s.usage,
+                ...state.usage,
                 [currentModelId]: {
-                  requestCount: currentUsage.requestCount + 1,
-                  totalTokens: currentUsage.totalTokens + (tokens || 0),
-                  errorCount: currentUsage.errorCount,
+                  requestCount: current.requestCount + 1,
+                  totalTokens: current.totalTokens + (tokens || 0),
+                  errorCount: current.errorCount,
                   lastUsed: now,
                 },
               },
@@ -147,24 +120,16 @@ export const useModelStore = create<ModelStore>()(
         },
 
         recordError: () => {
-          const state = get();
-          const currentModelId = state.currentModelId;
+          const currentModelId = get().currentModelId;
           const now = Date.now();
-          
-          set((s) => {
-            const currentUsage = s.usage[currentModelId] || {
-              requestCount: 0,
-              totalTokens: 0,
-              errorCount: 0,
-              lastUsed: 0,
-            };
-            
+          set((state) => {
+            const current = state.usage[currentModelId] ?? emptyUsage();
             return {
               usage: {
-                ...s.usage,
+                ...state.usage,
                 [currentModelId]: {
-                  ...currentUsage,
-                  errorCount: currentUsage.errorCount + 1,
+                  ...current,
+                  errorCount: current.errorCount + 1,
                   lastUsed: now,
                 },
               },
@@ -172,24 +137,22 @@ export const useModelStore = create<ModelStore>()(
           });
         },
 
-        updateSwitchConfig: (config: Partial<ModelSwitchConfig>) => {
-          set((s) => ({
-            switchConfig: { ...s.switchConfig, ...config },
+        updateSwitchConfig: (config) => {
+          set((state) => ({ switchConfig: { ...state.switchConfig, ...config } }));
+        },
+
+        toggleAutoSwitch: (enabled) => {
+          set((state) => ({
+            isAutoSwitchEnabled: enabled !== undefined ? enabled : !state.isAutoSwitchEnabled,
           }));
         },
 
-        toggleAutoSwitch: (enabled?: boolean) => {
-          set((s) => ({
-            isAutoSwitchEnabled: enabled !== undefined ? enabled : !s.isAutoSwitchEnabled,
-          }));
-        },
-
-        resetUsage: (modelId?: string) => {
+        resetUsage: (modelId) => {
           if (modelId) {
-            set((s) => {
-              const newUsage = { ...s.usage };
-              delete newUsage[modelId];
-              return { usage: newUsage };
+            set((state) => {
+              const usage = { ...state.usage };
+              delete usage[modelId];
+              return { usage };
             });
           } else {
             set({ usage: {} });
@@ -197,32 +160,25 @@ export const useModelStore = create<ModelStore>()(
         },
 
         getStatistics: () => {
-          const state = get();
-          const usageValues = Object.values(state.usage);
-          
-          const totalRequests = usageValues.reduce((sum, u) => sum + u.requestCount, 0);
-          const totalTokens = usageValues.reduce((sum, u) => sum + u.totalTokens, 0);
-          const totalErrors = usageValues.reduce((sum, u) => sum + u.errorCount, 0);
-          const modelCount = usageValues.length;
-          const averageErrorRate = totalRequests > 0 ? totalErrors / totalRequests : 0;
-          
+          const usageValues = Object.values(get().usage);
+          const totalRequests = usageValues.reduce((sum, item) => sum + item.requestCount, 0);
+          const totalTokens = usageValues.reduce((sum, item) => sum + item.totalTokens, 0);
+          const totalErrors = usageValues.reduce((sum, item) => sum + item.errorCount, 0);
           return {
             totalRequests,
             totalTokens,
             totalErrors,
-            modelCount,
-            averageErrorRate,
+            modelCount: usageValues.length,
+            averageErrorRate: totalRequests > 0 ? totalErrors / totalRequests : 0,
           };
         },
 
-        getModelHealth: () => {
-          const state = get();
-          return Object.entries(state.usage).map(([modelId, usage]) => ({
+        getModelHealth: () =>
+          Object.entries(get().usage).map(([modelId, usage]) => ({
             modelId,
             isHealthy: usage.errorCount < 3,
             errorRate: usage.requestCount > 0 ? usage.errorCount / usage.requestCount : 0,
-          }));
-        },
+          })),
       }),
       {
         name: 'model_store',
@@ -233,51 +189,9 @@ export const useModelStore = create<ModelStore>()(
           switchConfig: state.switchConfig,
           isAutoSwitchEnabled: state.isAutoSwitchEnabled,
         }),
-      }
-    )
-  )
+      },
+    ),
+  ),
 );
-
-export const useCurrentModel = () => {
-  const currentModel = useModelStore(state => state.getCurrentModel());
-  const currentModelId = useModelStore(state => state.currentModelId);
-  return { model: currentModel, modelId: currentModelId };
-};
-
-export const useModelSwitch = () => {
-  const recordUsage = useModelStore(state => state.recordUsage);
-  const recordError = useModelStore(state => state.recordError);
-  const isAutoSwitchEnabled = useModelStore(state => state.isAutoSwitchEnabled);
-  const getAvailableFallback = useModelStore(state => state.getAvailableFallback);
-  const setCurrentModel = useModelStore(state => state.setCurrentModel);
-  const switchConfig = useModelStore(state => state.switchConfig);
-
-  const switchToNextModel = async (errorType?: string): Promise<boolean> => {
-    if (!isAutoSwitchEnabled) return false;
-
-    const availableModels = getAvailableFallback();
-    if (availableModels.length === 0) return false;
-
-    const nextModel = availableModels[0];
-    setCurrentModel(nextModel.id);
-    
-    return true;
-  };
-
-  return {
-    recordUsage,
-    recordError,
-    isAutoSwitchEnabled,
-    switchToNextModel,
-    switchConfig,
-  };
-};
-
-export const useModelStatistics = () => {
-  const statistics = useModelStore(state => state.getStatistics());
-  const modelHealth = useModelStore(state => state.getModelHealth());
-  
-  return { statistics, modelHealth };
-};
 
 export default useModelStore;

@@ -34,6 +34,15 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({ levels, currentLevelId, c
               key={level.id}
               className={`${styles.levelCard} ${isCompleted ? styles.completed : ""} ${currentLevelId === level.id ? styles.current : ""} ${isLocked ? styles.locked : ""}`}
               onClick={() => !isLocked && onSelectLevel(level.id)}
+              role="button"
+              tabIndex={isLocked ? -1 : 0}
+              aria-disabled={isLocked}
+              onKeyDown={(event) => {
+                if (!isLocked && (event.key === 'Enter' || event.key === ' ')) {
+                  event.preventDefault();
+                  onSelectLevel(level.id);
+                }
+              }}
             >
               <div className={styles.levelNumber}>第 {index + 1} 关</div>
               <div className={styles.levelName}>{level.name}</div>

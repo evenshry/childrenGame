@@ -1,18 +1,19 @@
-import { Level, Command } from "@/types/global";
-import { customLevelStorage } from "./storage";
+import type { Level } from '@/types/global';
+import { customLevelStorage } from './storage';
+import { generateId } from './id';
 
-export const generateId = () => `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+export { generateId };
 
 export const getAllLevels = (): Level[] => {
-  const processedBuiltinLevels = levels.map((level) => {
-    const modifiedLevel = customLevelStorage.getModifiedBuiltinLevel?.(level.id);
-    return modifiedLevel || level;
-  });
+  const modifiedBuiltinLevels = customLevelStorage.getAllModifiedBuiltinLevels();
+  const processedBuiltinLevels = levels.map(
+    (level) => modifiedBuiltinLevels[level.id] || level,
+  );
   return [...processedBuiltinLevels, ...customLevelStorage.getAll()];
 };
 
 export const getLevelById = (id: string): Level | undefined => {
-  const modifiedLevel = customLevelStorage.getModifiedBuiltinLevel?.(id);
+  const modifiedLevel = customLevelStorage.getAllModifiedBuiltinLevels()[id];
   if (modifiedLevel) {
     return modifiedLevel;
   }

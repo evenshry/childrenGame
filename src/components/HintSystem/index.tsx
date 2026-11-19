@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { playClickSound, playCollectSound } from '@/utils/animations';
+import { playClickSound } from '@/utils/animations';
 import styles from './index.module.scss';
 
 export interface Hint {
@@ -107,7 +107,7 @@ const HintSystem: React.FC<HintSystemProps> = ({
   const [panelPosition, setPanelPosition] = useState({ top: 0, left: 0 });
   const buttonRef = useRef<HTMLButtonElement>(null);
 
-  const updatePanelPosition = () => {
+  const updatePanelPosition = useCallback(() => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       let left = rect.left;
@@ -125,13 +125,13 @@ const HintSystem: React.FC<HintSystemProps> = ({
 
       setPanelPosition({ top, left });
     }
-  };
+  }, [hints.length]);
 
   useEffect(() => {
     if (showHints) {
       updatePanelPosition();
     }
-  }, [showHints]);
+  }, [showHints, updatePanelPosition]);
 
   useEffect(() => {
     if (!showHints) return;
@@ -159,7 +159,7 @@ const HintSystem: React.FC<HintSystemProps> = ({
       document.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener('resize', handleResize);
     };
-  }, [showHints]);
+  }, [showHints, updatePanelPosition]);
 
   const handleShowHint = () => {
     playClickSound();

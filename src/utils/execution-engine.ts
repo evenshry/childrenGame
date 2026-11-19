@@ -1,422 +1,297 @@
-import { Command, Direction, MapData, Cell, RobotState } from '@/types/global';
+import type { Command, ConditionType, MapData, RobotState } from '@/types/global';
+import {
+  evaluateCondition,
+  isValidPosition,
+  nextPosition,
+  turnLeft,
+  turnRight,
+} from './geometry';
+
+export interface ExecutionStep {
+  robot: RobotState;
+  collectedStars: string[];
+  commandId: string | null;
+  message: string;
+  success: boolean;
+  /** 命中调试断点，尚未执行该指令 */
+  paused: boolean;
+  /** 循环 / 条件等控制指令产生的展示步骤 */
+  control: boolean;
+  /** 已执行的原子动作数 */
+  steps: number;
+}
 
 export interface ExecutionResult {
   success: boolean;
   message: string;
   robot: RobotState;
-  collectedStars: { x: number; y: number }[];
+  collectedStars: string[];
   steps: number;
 }
 
-export interface ExecutionContext {
-  robot: RobotState;
-  map: MapData;
-  collectedStars: { x: number; y: number }[];
-  commands: Command[];
-  currentIndex: number;
-  maxSteps: number;
-  executionHistory: {
-    robot: RobotState;
-    collectedStars: { x: number; y: number }[];
-  }[];
+export interface ExecutionOptions {
+  breakpoints?: Set<string>;
+  maxLoopIterations?: number;
+  maxRepeatIterations?: number;
+  maxSteps?: number;
 }
 
-export class ExecutionEngine {
-  private context: ExecutionContext | null = null;
-  private abortController: AbortController | null = null;
-  private stepDelay: number = 0;
+export const starKey = (x: number, y: number): string => `${x},${y}`;
 
-  constructor(stepDelay: number = 0) {
-    this.stepDelay = stepDelay;
+const commandLabel = (command: Command): string => {
+  switch (command.type) {
+    case 'forward':
+      return '前进';
+    case 'left':
+      return '左转';
+    case 'right':
+      return '右转';
+    case 'loop':
+      return `循环 ${command.params?.times ?? 2} 次`;
+    case 'if':
+      return '如果';
+    case 'repeatUntil':
+      return '重复直到';
+    case 'collect':
+      return '收集';
+    case 'wait':
+      return `等待 ${command.params?.seconds ?? 1} 秒`;
+    case 'randomTurn':
+      return '随机转向';
+    default:
+      return '指令';
   }
+};
 
-  public setStepDelay(delay: number) {
-    this.stepDelay = delay;
-  }
+/**
+ * 统一的程序执行器。
+ * - 运行模式：消费 generator，按步骤更新 UI
+ * - 调试模式：每次 next() 只推进一个原子步骤
+ * - 通过 maxSteps / maxLoop / maxRepeat 防止死循环
+ */
+export function* runProgram(
+  commands: Command[],
+  initialRobot: RobotState,
+  map: MapData,
+  initialCollected: Iterable<string> = [],
+  options: ExecutionOptions = {},
+): Generator<ExecutionStep, ExecutionResult, void> {
+  const maxLoop = options.maxLoopIterations ?? 100;
+  const maxRepeat = options.maxRepeatIterations ?? 200;
+  const maxSteps = options.maxSteps ?? 10000;
+  const breakpoints = options.breakpoints ?? new Set<string>();
 
-  public async execute(
-    commands: Command[],
-    initialRobot: RobotState,
-    map: MapData,
-    onStep?: (step: number, robot: RobotState) => void,
-    onCollect?: (x: number, y: number) => void
-  ): Promise<ExecutionResult> {
-    this.abortController = new AbortController();
+  const collected = new Set(initialCollected);
+  let robot: RobotState = { ...initialRobot };
+  let steps = 0;
+  let failed = false;
+  let failureMessage = '';
 
-    this.context = {
-      robot: { ...initialRobot },
-      map,
-      collectedStars: [],
-      commands,
-      currentIndex: 0,
-      maxSteps: commands.length * 10,
-      executionHistory: [],
-    };
+  const snapshot = (
+    commandId: string | null,
+    message: string,
+    success = true,
+    paused = false,
+    control = false,
+  ): ExecutionStep => ({
+    robot: { ...robot },
+    collectedStars: [...collected],
+    commandId,
+    message,
+    success,
+    paused,
+    control,
+    steps,
+  });
 
-    const result = await this.executeCommands(
-      commands,
-      onStep,
-      onCollect
-    );
+  const fail = (message: string, commandId: string | null = null): ExecutionStep => {
+    failed = true;
+    failureMessage = message;
+    return snapshot(commandId, message, false);
+  };
 
-    return result;
-  }
-
-  private async executeCommands(
-    commands: Command[],
-    onStep?: (step: number, robot: RobotState) => void,
-    onCollect?: (x: number, y: number) => void
-  ): Promise<ExecutionResult> {
-    if (!this.context) {
-      return this.createErrorResult('Execution context not initialized');
+  function* execMany(list: Command[]): Generator<ExecutionStep, boolean, void> {
+    for (const command of list) {
+      const ok = yield* execOne(command);
+      if (!ok) return false;
     }
-
-    for (let i = 0; i < commands.length; i++) {
-      if (this.abortController?.signal.aborted) {
-        return this.createErrorResult('Execution aborted');
-      }
-
-      const command = commands[i];
-      this.context.currentIndex = i;
-
-      const stepResult = await this.executeCommand(command, onCollect);
-
-      if (!stepResult.success) {
-        return {
-          ...stepResult,
-          steps: i + 1,
-          robot: this.context.robot,
-          collectedStars: this.context.collectedStars,
-        };
-      }
-
-      if (onStep) {
-        onStep(i + 1, { ...this.context.robot });
-      }
-
-      if (this.stepDelay > 0) {
-        await this.delay(this.stepDelay);
-      }
-
-      if (i >= this.context.maxSteps) {
-        return this.createErrorResult('Maximum steps exceeded');
-      }
-    }
-
-    return this.createSuccessResult();
+    return true;
   }
 
-  private async executeCommand(
-    command: Command,
-    onCollect?: (x: number, y: number) => void
-  ): Promise<{ success: boolean; message: string }> {
-    if (!this.context) {
-      return { success: false, message: 'No execution context' };
+  function* execOne(command: Command): Generator<ExecutionStep, boolean, void> {
+    if (failed) return false;
+    if (steps >= maxSteps) {
+      yield fail('程序执行步骤过多，可能存在死循环', command.id);
+      return false;
+    }
+    if (breakpoints.has(command.id)) {
+      yield snapshot(command.id, `断点: ${commandLabel(command)}`, true, true);
     }
 
     switch (command.type) {
-      case 'forward':
-        return this.moveForward();
+      case 'forward': {
+        const { x, y } = nextPosition(robot);
+        if (!isValidPosition(x, y, map)) {
+          yield fail('机器人撞墙了！', command.id);
+          return false;
+        }
+        robot = { ...robot, x, y };
+        steps++;
+        const key = starKey(x, y);
+        const hasStar =
+          map.stars.some((star) => starKey(star.x, star.y) === key) && !collected.has(key);
+        if (hasStar) collected.add(key);
+        yield snapshot(
+          command.id,
+          hasStar ? `前进并收集星星！当前位置: (${x}, ${y})` : `前进到: (${x}, ${y})`,
+        );
+        return true;
+      }
       case 'left':
-        return this.turnLeft();
+        robot = { ...robot, dir: turnLeft(robot.dir) };
+        steps++;
+        yield snapshot(command.id, `左转，当前方向: ${robot.dir}`);
+        return true;
       case 'right':
-        return this.turnRight();
-      case 'loop':
-        return this.executeLoop(command, onCollect);
-      case 'if':
-        return this.executeCondition(command, onCollect);
-      case 'repeatUntil':
-        return this.executeRepeatUntil(command, onCollect);
-      case 'collect':
-        return this.collectStar(onCollect);
+        robot = { ...robot, dir: turnRight(robot.dir) };
+        steps++;
+        yield snapshot(command.id, `右转，当前方向: ${robot.dir}`);
+        return true;
+      case 'randomTurn': {
+        const directions: RobotState['dir'][] = ['up', 'down', 'left', 'right'];
+        robot = {
+          ...robot,
+          dir: directions[Math.floor(Math.random() * directions.length)],
+        };
+        steps++;
+        yield snapshot(command.id, `随机转向，当前方向: ${robot.dir}`);
+        return true;
+      }
+      case 'collect': {
+        const key = starKey(robot.x, robot.y);
+        const hasStar =
+          map.stars.some((star) => starKey(star.x, star.y) === key) && !collected.has(key);
+        if (hasStar) {
+          collected.add(key);
+        }
+        steps++;
+        yield snapshot(command.id, hasStar ? '收集星星！' : '没有星星可以收集！');
+        return true;
+      }
       case 'wait':
-        return { success: true, message: '等待指令' };
-      case 'randomTurn':
-        return this.randomTurn();
-      default:
-        return { success: true, message: 'Unknown command' };
-    }
-  }
-
-  private moveForward(): { success: boolean; message: string } {
-    if (!this.context) return { success: false, message: 'No context' };
-
-    const { robot, map } = this.context;
-    const { nextX, nextY } = this.getNextPosition(robot);
-
-    if (!this.isValidPosition(nextX, nextY)) {
-      return { success: false, message: '撞墙了！' };
-    }
-
-    const cell = map.cells.find((c) => c.x === nextX && c.y === nextY);
-    if (cell?.type === 'wall') {
-      return { success: false, message: '撞墙了！' };
-    }
-
-    robot.x = nextX;
-    robot.y = nextY;
-
-    return { success: true, message: '移动成功' };
-  }
-
-  private turnLeft(): { success: boolean; message: string } {
-    if (!this.context) return { success: false, message: 'No context' };
-
-    const { robot } = this.context;
-    const directions: Direction[] = ['up', 'left', 'down', 'right'];
-    const currentIndex = directions.indexOf(robot.dir);
-    robot.dir = directions[(currentIndex + 1) % 4];
-
-    return { success: true, message: '左转成功' };
-  }
-
-  private turnRight(): { success: boolean; message: string } {
-    if (!this.context) return { success: false, message: 'No context' };
-
-    const { robot } = this.context;
-    const directions: Direction[] = ['up', 'left', 'down', 'right'];
-    const currentIndex = directions.indexOf(robot.dir);
-    robot.dir = directions[(currentIndex + 3) % 4];
-
-    return { success: true, message: '右转成功' };
-  }
-
-  private randomTurn(): { success: boolean; message: string } {
-    if (!this.context) return { success: false, message: 'No context' };
-
-    const { robot } = this.context;
-    const directions: Direction[] = ['up', 'left', 'down', 'right'];
-    const randomIndex = Math.floor(Math.random() * directions.length);
-    robot.dir = directions[randomIndex];
-
-    return { success: true, message: '随机转向成功' };
-  }
-
-  private async executeLoop(
-    command: Command,
-    onCollect?: (x: number, y: number) => void
-  ): Promise<{ success: boolean; message: string }> {
-    if (!this.context || !command.children || !command.params?.times) {
-      return { success: true, message: 'Loop executed' };
-    }
-
-    const times = Math.min(command.params.times, 10);
-
-    for (let i = 0; i < times; i++) {
-      if (this.abortController?.signal.aborted) {
-        return { success: false, message: 'Loop aborted' };
+        steps++;
+        yield snapshot(command.id, `等待 ${command.params?.seconds ?? 1} 秒`);
+        return true;
+      case 'loop': {
+        const times = Math.max(0, Math.min(command.params?.times ?? 2, maxLoop));
+        yield snapshot(command.id, `开始循环 ${times} 次`, true, false, true);
+        for (let i = 0; i < times; i++) {
+          const ok = yield* execMany(command.children ?? []);
+          if (!ok) return false;
+        }
+        return true;
       }
-
-      const result = await this.executeCommands(command.children, undefined, onCollect);
-
-      if (!result.success) {
-        return result;
-      }
-    }
-
-    return { success: true, message: '循环执行完成' };
-  }
-
-  private async executeCondition(
-    command: Command,
-    onCollect?: (x: number, y: number) => void
-  ): Promise<{ success: boolean; message: string }> {
-    if (!this.context || !command.children) {
-      return { success: true, message: 'Condition evaluated' };
-    }
-
-    const shouldExecute = this.evaluateCondition(command.params?.condition as string);
-
-    if (shouldExecute) {
-      return await this.executeCommands(command.children, undefined, onCollect);
-    }
-
-    return { success: true, message: '条件不满足，跳过' };
-  }
-
-  private async executeRepeatUntil(
-    command: Command,
-    onCollect?: (x: number, y: number) => void
-  ): Promise<{ success: boolean; message: string }> {
-    if (!this.context || !command.children) {
-      return { success: true, message: 'Repeat until executed' };
-    }
-
-    const maxIterations = 50;
-
-    for (let i = 0; i < maxIterations; i++) {
-      if (this.abortController?.signal.aborted) {
-        return { success: false, message: 'Repeat until aborted' };
-      }
-
-      const result = await this.executeCommands(command.children, undefined, onCollect);
-
-      if (!result.success) {
-        return result;
-      }
-
-      if (this.evaluateCondition(command.params?.condition as string)) {
-        return { success: true, message: '重复直到条件满足' };
-      }
-    }
-
-    return { success: false, message: '重复次数过多' };
-  }
-
-  private collectStar(
-    onCollect?: (x: number, y: number) => void
-  ): { success: boolean; message: string } {
-    if (!this.context) return { success: false, message: 'No context' };
-
-    const { robot, map, collectedStars } = this.context;
-    const star = map.stars.find(
-      (s) => s.x === robot.x && s.y === robot.y &&
-      !collectedStars.some(cs => cs.x === s.x && cs.y === s.y)
-    );
-
-    if (star) {
-      collectedStars.push({ x: star.x, y: star.y });
-      if (onCollect) {
-        onCollect(star.x, star.y);
-      }
-      return { success: true, message: '收集星星！' };
-    }
-
-    return { success: false, message: '这里没有星星' };
-  }
-
-  private evaluateCondition(condition: string | undefined): boolean {
-    if (!this.context || !condition) return true;
-
-    const { robot, map, collectedStars } = this.context;
-
-    switch (condition) {
-      case 'atStar':
-        return map.stars.some(
-          (s) => s.x === robot.x && s.y === robot.y &&
-          !collectedStars.some(cs => cs.x === s.x && cs.y === s.y)
+      case 'if': {
+        const met = evaluateCondition(
+          command.params?.condition as ConditionType | undefined,
+          robot,
+          map,
+          collected.size,
         );
-      case 'atGoal':
-        return map.cells.some(
-          (c) => c.type === 'goal' && c.x === robot.x && c.y === robot.y
-        );
-      case 'facingWall': {
-        const { nextX, nextY } = this.getNextPosition(robot);
-        return !this.isValidPosition(nextX, nextY) ||
-          this.context!.map.cells.some((c) => c.type === 'wall' && c.x === nextX && c.y === nextY);
+        yield snapshot(command.id, `条件判断: ${met ? '满足' : '不满足'}`, true, false, true);
+        return yield* execMany(met ? command.children ?? [] : command.elseChildren ?? []);
       }
-      case 'allStarsCollected':
-        return collectedStars.length >= map.stars.length;
+      case 'repeatUntil': {
+        yield snapshot(
+          command.id,
+          `重复直到: ${commandLabel(command)}`,
+          true,
+          false,
+          true,
+        );
+        let iterations = 0;
+        while (iterations < maxRepeat) {
+          const ok = yield* execMany(command.children ?? []);
+          if (!ok) return false;
+          iterations++;
+          if (
+            evaluateCondition(
+              command.params?.condition as ConditionType | undefined,
+              robot,
+              map,
+              collected.size,
+            )
+          ) {
+            return true;
+          }
+        }
+        yield fail(`重复执行超过 ${maxRepeat} 次仍未满足条件`, command.id);
+        return false;
+      }
       default:
         return true;
     }
   }
 
-  private getNextPosition(
-    robot: RobotState,
-    distance: number = 1
-  ): { nextX: number; nextY: number } {
-    switch (robot.dir) {
-      case 'up':
-        return { nextX: robot.x, nextY: robot.y - distance };
-      case 'down':
-        return { nextX: robot.x, nextY: robot.y + distance };
-      case 'left':
-        return { nextX: robot.x - distance, nextY: robot.y };
-      case 'right':
-        return { nextX: robot.x + distance, nextY: robot.y };
-      default:
-        return { nextX: robot.x, nextY: robot.y };
-    }
-  }
+  yield* execMany(commands);
 
-  private isValidPosition(x: number, y: number): boolean {
-    if (!this.context) return false;
-    const { map } = this.context;
-    return x >= 0 && x < map.width && y >= 0 && y < map.height;
-  }
-
-  private delay(ms: number): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, ms));
-  }
-
-  private createSuccessResult(): ExecutionResult {
-    if (!this.context) {
-      return {
-        success: false,
-        message: 'No context',
-        robot: { x: 0, y: 0, dir: 'right' },
-        collectedStars: [],
-        steps: 0,
-      };
-    }
-
-    const { robot, collectedStars } = this.context;
-    const { map } = this.context;
-
-    const atGoal = map.cells.some(
-      (c) => c.type === 'goal' && c.x === robot.x && c.y === robot.y
-    );
-    const allStarsCollected = collectedStars.length >= map.stars.length;
-
-    if (atGoal && allStarsCollected) {
-      return {
-        success: true,
-        message: '恭喜过关！',
-        robot,
-        collectedStars,
-        steps: this.context.commands.length,
-      };
-    } else if (!atGoal) {
-      return {
-        success: false,
-        message: '没有到达终点',
-        robot,
-        collectedStars,
-        steps: this.context.commands.length,
-      };
-    } else {
-      return {
-        success: false,
-        message: '还有星星没有收集',
-        robot,
-        collectedStars,
-        steps: this.context.commands.length,
-      };
-    }
-  }
-
-  private createErrorResult(message: string): ExecutionResult {
-    if (!this.context) {
-      return {
-        success: false,
-        message,
-        robot: { x: 0, y: 0, dir: 'right' },
-        collectedStars: [],
-        steps: 0,
-      };
-    }
-
+  if (failed) {
     return {
       success: false,
-      message,
-      robot: this.context.robot,
-      collectedStars: this.context.collectedStars,
-      steps: this.context.currentIndex,
+      message: failureMessage,
+      robot,
+      collectedStars: [...collected],
+      steps,
     };
   }
 
-  public abort() {
-    this.abortController?.abort();
-  }
+  const atGoal = map.cells.some(
+    (cell) => cell.type === 'goal' && cell.x === robot.x && cell.y === robot.y,
+  );
+  const allStars = [...new Set(map.stars.map((star) => starKey(star.x, star.y)))].every(
+    (key) => collected.has(key),
+  );
 
-  public reset() {
-    this.abort();
-    this.context = null;
-    this.abortController = null;
+  if (atGoal && allStars) {
+    return {
+      success: true,
+      message: '恭喜你过关了！',
+      robot,
+      collectedStars: [...collected],
+      steps,
+    };
   }
+  if (!atGoal) {
+    return {
+      success: false,
+      message: '机器人没有到达终点！',
+      robot,
+      collectedStars: [...collected],
+      steps,
+    };
+  }
+  return {
+    success: false,
+    message: '还有星星没有收集！',
+    robot,
+    collectedStars: [...collected],
+    steps,
+  };
 }
 
-export const createExecutionEngine = (stepDelay: number = 0): ExecutionEngine => {
-  return new ExecutionEngine(stepDelay);
+/** 同步执行完整个程序（用于本地寻路验证 / 预览） */
+export const simulateProgram = (
+  commands: Command[],
+  initialRobot: RobotState,
+  map: MapData,
+  initialCollected: Iterable<string> = [],
+): ExecutionResult => {
+  const generator = runProgram(commands, initialRobot, map, initialCollected);
+  let result = generator.next();
+  while (!result.done) {
+    result = generator.next();
+  }
+  return result.value;
 };
+
+export { commandLabel };

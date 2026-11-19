@@ -72,14 +72,19 @@ export interface RobotState {
 
 // 成就类型
 export type AchievementType =
-  | "first_program"
-  | "complete_level_1"
-  | "complete_level_5"
-  | "complete_level_10"
-  | "collect_all_stars"
-  | "use_loop"
-  | "use_condition"
-  | "perfect_solution";
+  | "first_steps"
+  | "star_collector"
+  | "star_master"
+  | "level_5"
+  | "level_10"
+  | "level_20"
+  | "perfect_run"
+  | "speed_demon"
+  | "no_hints"
+  | "creative"
+  | "programmer"
+  | "dedicated"
+  | "master";
 
 // 成就接口
 export interface Achievement {

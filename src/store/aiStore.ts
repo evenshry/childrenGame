@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { LevelGenRequest, LevelGenResult, SolverRequest, SolverResult } from '@/api/qianwen/types';
+import type {
+  LevelGenRequest,
+  LevelGenResult,
+  SolverRequest,
+  SolverResult,
+} from '@/api/qianwen/types';
 
 interface AISettings {
   enableLevelGeneration: boolean;
@@ -13,31 +18,31 @@ interface AISettings {
 interface LevelHistoryData {
   request: LevelGenRequest;
   result: LevelGenResult | null;
-  rawResponse?: any;
+  rawResponse?: unknown;
 }
 
 interface SolverHistoryData {
   request: SolverRequest;
   result: SolverResult | null;
-  rawResponse?: any;
+  rawResponse?: unknown;
 }
 
-type AIHistoryData = LevelHistoryData | SolverHistoryData;
-
-interface AIHistoryEntry {
+interface AIHistoryBase {
   id: string;
-  type: 'level' | 'solve';
   timestamp: number;
   tokensUsed: number;
   success: boolean;
-  data: AIHistoryData;
   error?: string;
 }
+
+export type AIHistoryEntry =
+  | (AIHistoryBase & { type: 'level'; data: LevelHistoryData })
+  | (AIHistoryBase & { type: 'solve'; data: SolverHistoryData });
 
 interface AIState {
   isGenerating: boolean;
   showSettings: boolean;
-  lastGeneratedLevel: any;
+  lastGeneratedLevel: LevelGenResult | null;
   usage: {
     totalTokens: number;
     todayTokens: number;
@@ -49,7 +54,7 @@ interface AIState {
 interface AIActions {
   setIsGenerating: (isGenerating: boolean) => void;
   setShowSettings: (show: boolean) => void;
-  setLastGeneratedLevel: (level: any) => void;
+  setLastGeneratedLevel: (level: LevelGenResult | null) => void;
   updateUsage: (input: number, output: number) => void;
   resetDailyUsage: () => void;
   updateSettings: (settings: Partial<AISettings>) => void;
@@ -60,18 +65,27 @@ interface AIActions {
   getHistoryById: (id: string) => AIHistoryEntry | undefined;
 }
 
+const SETTINGS_KEY = 'ai_settings';
+const HISTORY_KEY = 'ai_history';
+const TOTAL_TOKENS_KEY = 'ai_total_tokens';
+const TODAY_TOKENS_KEY = 'ai_today_tokens';
+const USAGE_DATE_KEY = 'ai_usage_date';
+
 const DEFAULT_SETTINGS: AISettings = {
   enableLevelGeneration: true,
   enableAutoSolve: true,
   dailyTokenLimit: 10000,
   apiKey: '',
-  apiBaseUrl: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
+  apiBaseUrl:
+    'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation',
 };
+
+const todayKey = (): string => new Date().toDateString();
 
 const loadSettings = (): AISettings => {
   try {
-    const saved = localStorage.getItem('ai_settings');
-    return saved ? { ...DEFAULT_SETTINGS, ...JSON.parse(saved) } : DEFAULT_SETTINGS;
+    const saved = localStorage.getItem(SETTINGS_KEY);
+    return saved ? { ...DEFAULT_SETTINGS, ...(JSON.parse(saved) as Partial<AISettings>) } : DEFAULT_SETTINGS;
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -79,11 +93,25 @@ const loadSettings = (): AISettings => {
 
 const loadHistory = (): AIHistoryEntry[] => {
   try {
-    const saved = localStorage.getItem('ai_history');
-    return saved ? JSON.parse(saved) : [];
+    const saved = localStorage.getItem(HISTORY_KEY);
+    const parsed: unknown = saved ? JSON.parse(saved) : [];
+    return Array.isArray(parsed) ? (parsed as AIHistoryEntry[]) : [];
   } catch {
     return [];
   }
+};
+
+const loadUsage = (): { totalTokens: number; todayTokens: number } => {
+  const totalTokens = parseInt(localStorage.getItem(TOTAL_TOKENS_KEY) || '0', 10) || 0;
+  let todayTokens = parseInt(localStorage.getItem(TODAY_TOKENS_KEY) || '0', 10) || 0;
+
+  if (localStorage.getItem(USAGE_DATE_KEY) !== todayKey()) {
+    todayTokens = 0;
+    localStorage.setItem(TODAY_TOKENS_KEY, '0');
+    localStorage.setItem(USAGE_DATE_KEY, todayKey());
+  }
+
+  return { totalTokens, todayTokens };
 };
 
 export const useAIStore = create<AIState & AIActions>()(
@@ -92,86 +120,70 @@ export const useAIStore = create<AIState & AIActions>()(
       isGenerating: false,
       showSettings: false,
       lastGeneratedLevel: null,
-      usage: {
-        totalTokens: parseInt(localStorage.getItem('ai_total_tokens') || '0'),
-        todayTokens: parseInt(localStorage.getItem('ai_today_tokens') || '0'),
-      },
+      usage: loadUsage(),
       settings: loadSettings(),
       generationHistory: loadHistory(),
 
       setIsGenerating: (isGenerating) => set({ isGenerating }),
       setShowSettings: (show) => set({ showSettings: show }),
       setLastGeneratedLevel: (level) => set({ lastGeneratedLevel: level }),
-      
+
       updateUsage: (input, output) => {
-        set((state) => {
-          const newTotal = state.usage.totalTokens + input + output;
-          const newToday = state.usage.todayTokens + input + output;
-          
-          localStorage.setItem('ai_total_tokens', newTotal.toString());
-          localStorage.setItem('ai_today_tokens', newToday.toString());
-          
-          return {
-            usage: {
-              totalTokens: newTotal,
-              todayTokens: newToday,
-            },
-          };
-        });
+        const { usage } = get();
+        const newTotal = usage.totalTokens + input + output;
+        const newToday = usage.todayTokens + input + output;
+
+        localStorage.setItem(TOTAL_TOKENS_KEY, newTotal.toString());
+        localStorage.setItem(TODAY_TOKENS_KEY, newToday.toString());
+        localStorage.setItem(USAGE_DATE_KEY, todayKey());
+
+        set({ usage: { totalTokens: newTotal, todayTokens: newToday } });
       },
-      
+
       resetDailyUsage: () => {
-        set((state) => ({
-          usage: {
-            totalTokens: state.usage.totalTokens,
-            todayTokens: 0,
-          },
-        }));
-        localStorage.setItem('ai_today_tokens', '0');
+        localStorage.setItem(TODAY_TOKENS_KEY, '0');
+        localStorage.setItem(USAGE_DATE_KEY, todayKey());
+        set({ usage: { totalTokens: get().usage.totalTokens, todayTokens: 0 } });
       },
-      
+
       updateSettings: (settings) => {
-        set((state) => {
-          const newSettings = { ...state.settings, ...settings };
-          localStorage.setItem('ai_settings', JSON.stringify(newSettings));
-          return { settings: newSettings };
-        });
+        const newSettings = { ...get().settings, ...settings };
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+        set({ settings: newSettings });
       },
-      
+
       addHistoryEntry: (entry) => {
-        set((state) => {
-          const newHistory = [entry, ...state.generationHistory].slice(0, 100);
-          localStorage.setItem('ai_history', JSON.stringify(newHistory));
-          return { generationHistory: newHistory };
-        });
+        const newHistory = [entry, ...get().generationHistory].slice(0, 100);
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
+        set({ generationHistory: newHistory });
       },
-      
+
       deleteHistoryEntry: (id) => {
-        set((state) => {
-          const newHistory = state.generationHistory.filter(entry => entry.id !== id);
-          localStorage.setItem('ai_history', JSON.stringify(newHistory));
-          return { generationHistory: newHistory };
-        });
+        const newHistory = get().generationHistory.filter((entry) => entry.id !== id);
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
+        set({ generationHistory: newHistory });
       },
-      
+
       clearHistory: () => {
+        localStorage.removeItem(HISTORY_KEY);
         set({ generationHistory: [] });
-        localStorage.removeItem('ai_history');
       },
-      
+
       isDailyLimitReached: () => {
+        if (localStorage.getItem(USAGE_DATE_KEY) !== todayKey()) {
+          get().resetDailyUsage();
+          return false;
+        }
         const { usage, settings } = get();
         return usage.todayTokens >= settings.dailyTokenLimit;
       },
 
-      getHistoryById: (id) => {
-        return get().generationHistory.find(entry => entry.id === id);
-      },
-    })
-  )
+      getHistoryById: (id) => get().generationHistory.find((entry) => entry.id === id),
+    }),
+  ),
 );
 
-export type { AIHistoryEntry, AISettings, LevelHistoryData, SolverHistoryData };
+export type { AISettings, LevelHistoryData, SolverHistoryData };
 
 export const getApiKey = (): string => {
   const { settings } = useAIStore.getState();
@@ -186,9 +198,10 @@ export const getApiBaseUrl = (): string => {
   if (settings.apiBaseUrl) {
     return settings.apiBaseUrl;
   }
-  return import.meta.env.VITE_QIANWEN_API_BASE_URL || 'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation';
+  return (
+    import.meta.env.VITE_QIANWEN_API_BASE_URL ||
+    'https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation'
+  );
 };
 
-export const hasApiKey = (): boolean => {
-  return !!getApiKey();
-};
+export const hasApiKey = (): boolean => !!getApiKey();

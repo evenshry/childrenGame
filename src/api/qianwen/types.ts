@@ -1,3 +1,8 @@
+export interface QianWenUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+}
+
 export interface QianWenResponse {
   output: {
     choices?: Array<{
@@ -7,10 +12,7 @@ export interface QianWenResponse {
     }>;
     text?: string;
   } | string;
-  usage: {
-    input_tokens: number;
-    output_tokens: number;
-  };
+  usage?: QianWenUsage;
 }
 
 export interface LevelGenRequest {
@@ -46,13 +48,20 @@ export interface SolverRequest {
   goalY: number;
 }
 
+export interface SolverCommand {
+  id?: string;
+  type: string;
+  params?: {
+    times?: number;
+    condition?: string;
+    seconds?: number;
+    direction?: string;
+  };
+  children?: SolverCommand[];
+  elseChildren?: SolverCommand[];
+}
+
 export interface SolverResult {
-  commands: Array<{
-    type: string;
-    params?: {
-      times?: number;
-      condition?: string;
-    };
-  }>;
+  commands: SolverCommand[];
   explanation: string;
 }

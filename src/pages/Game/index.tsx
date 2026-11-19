@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
-import { Button, message, Modal, Spin } from "antd";
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Button, message, Modal, Spin } from 'antd';
 import {
   BulbOutlined,
   LeftOutlined,
@@ -12,30 +12,89 @@ import {
   BugOutlined,
   UndoOutlined,
   RedoOutlined,
-} from "@ant-design/icons";
-import CommandPanel from "@/components/CommandPanel";
-import CommandsContainer from "@/components/CommandsContainer";
-import GameCanvas from "@/components/GameCanvas";
-import LogPanel from "@/components/LogPanel";
-import Notification from "@/components/Notification";
-import HintSystem, { generateHints } from "@/components/HintSystem";
-import { useGameStore } from "@/store";
-import { levels, generateId, getAllLevels } from "@/utils/constants";
-import { executeCommand, flattenCommands, getDirectionLabel, getCommandLabel, isValidPosition } from "@/utils/gameEngine";
-import { playClickSound, playLevelUpSound } from "@/utils/animations";
-import { checkAchievements } from "@/utils/achievements";
-import { progressStorage, statsStorage, achievementStorage, programStorage } from "@/utils/storage";
-import { useAIAutoSolver } from "@/hooks/useAIAutoSolver";
-import { useAIStore } from "@/store/aiStore";
-import type { Command, RobotState, DebugStep, Direction, Achievement, SavedProgram, ConditionType } from "@/types/global";
-import styles from "./index.module.scss";
+} from '@ant-design/icons';
+import CommandPanel from '@/components/CommandPanel';
+import CommandsContainer from '@/components/CommandsContainer';
+import GameCanvas from '@/components/GameCanvas';
+import LogPanel from '@/components/LogPanel';
+import Notification from '@/components/Notification';
+import HintSystem, { generateHints } from '@/components/HintSystem';
+import { useGameStore } from '@/store';
+import { levels, generateId, getAllLevels } from '@/utils/constants';
+import { getDirectionLabel } from '@/utils/gameEngine';
+import { playClickSound, playLevelUpSound } from '@/utils/animations';
+import { checkAchievements } from '@/utils/achievements';
+import {
+  progressStorage,
+  statsStorage,
+  achievementStorage,
+  programStorage,
+} from '@/utils/storage';
+import { useAIAutoSolver } from '@/hooks/useAIAutoSolver';
+import { useAIStore } from '@/store/aiStore';
+import {
+  runProgram,
+  simulateProgram,
+  type ExecutionResult,
+  type ExecutionStep,
+} from '@/utils/execution-engine';
+import {
+  cloneCommands,
+  cloneCommandWithNewIds,
+  appendChildCommand,
+  updateCommandInTree,
+  duplicateCommandInTree,
+  moveCommandByOffset,
+  moveOrInsertCommand,
+  type CommandBranch,
+  type CommandLocation,
+  type DraggedCommand,
+} from '@/utils/commandTree';
+import type {
+  Command,
+  CommandType,
+  RobotState,
+  Achievement,
+  SavedProgram,
+} from '@/types/global';
+import type { SolverResult } from '@/api/qianwen/types';
+import styles from './index.module.scss';
 
-const deepCopyCommands = (cmds: Command[]): Command[] => {
-  return cmds.map((cmd) => ({
-    ...cmd,
-    children: cmd.children ? deepCopyCommands(cmd.children) : undefined,
-  }));
+interface SolverCommand {
+  type: string;
+  params?: Command['params'];
+  children?: SolverCommand[];
+  elseChildren?: SolverCommand[];
+}
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+
+const starsToPositions = (keys: string[]): { x: number; y: number }[] =>
+  keys.map((key) => {
+    const [x, y] = key.split(',').map(Number);
+    return { x, y };
+  });
+
+const getStartRobot = (map: { cells: { type: string; x: number; y: number; dir?: RobotState['dir'] }[] }): RobotState => {
+  const robotCell = map.cells.find((cell) => cell.type === 'robot');
+  return robotCell
+    ? { x: robotCell.x, y: robotCell.y, dir: robotCell.dir || 'right' }
+    : { x: 0, y: 0, dir: 'right' };
 };
+
+const toFullCommand = (command: SolverCommand): Command => ({
+  id: generateId(),
+  type: command.type as CommandType,
+  params: command.params ? { ...command.params } : undefined,
+  children: command.children?.map(toFullCommand),
+  elseChildren: command.elseChildren?.map(toFullCommand),
+});
+
+const solverResultToCommands = (result: SolverResult): Command[] =>
+  result.commands.map((command) => toFullCommand(command as SolverCommand));
 
 const Game: React.FC = () => {
   const {
@@ -49,11 +108,7 @@ const Game: React.FC = () => {
     isRunning,
     history,
     historyIndex,
-    setCurrentLevelIndex,
-    setCurrentLevelData,
-    setCurrentMap,
     setRobot,
-    setCommands,
     setCollectedStars,
     setIsDebugMode,
     setIsRunning,
@@ -64,151 +119,177 @@ const Game: React.FC = () => {
     redo,
     nextLevel,
     prevLevel,
+    commitCommands,
+    resetPreview,
+    loadLevel,
   } = useGameStore();
 
-  const [isDebugging, setIsDebugging] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [executionLog, setExecutionLog] = useState<string[]>([]);
-  const [breakpoints, setBreakpoints] = useState<string[]>([]);
-  const [debugRobot, setDebugRobot] = useState<RobotState>(robot);
-  const [debugCollectedStars, setDebugCollectedStars] = useState(0);
-  const [debugSteps, setDebugSteps] = useState<DebugStep[]>([]);
-  const [debugSpeed, setDebugSpeed] = useState(500);
-  const [notification, setNotification] = useState<{ message: string; type: "success" | "error" | "info" | "warning" } | null>(null);
+  const [notification, setNotification] = useState<{
+    message: string;
+    type: 'success' | 'error' | 'info' | 'warning';
+  } | null>(null);
   const [showDemoPrompt, setShowDemoPrompt] = useState(false);
-  const [executionHistory, setExecutionHistory] = useState<{ robot: RobotState; collectedStars: { x: number; y: number }[] }[]>([]);
-  const [allLevelsCount, setAllLevelsCount] = useState(getAllLevels().length);
-  const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [showAchievementNotification, setShowAchievementNotification] = useState<Achievement | null>(null);
-  const [levelHint, setLevelHint] = useState<string>("");
+  const [allLevelsCount, setAllLevelsCount] = useState(() => getAllLevels().length);
+  const [showAchievementNotification, setShowAchievementNotification] =
+    useState<Achievement | null>(null);
   const [showSolveModal, setShowSolveModal] = useState(false);
 
-  const { solve, error } = useAIAutoSolver();
-  const { settings, isGenerating, isDailyLimitReached } = useAIStore();
+  // 调试状态
+  const [isDebugging, setIsDebugging] = useState(false);
+  const [debugRobot, setDebugRobot] = useState<RobotState>(robot);
+  const [debugStars, setDebugStars] = useState<{ x: number; y: number }[]>([]);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
+  const [debugCommandId, setDebugCommandId] = useState<string | null>(null);
+  const [breakpoints, setBreakpoints] = useState<string[]>([]);
+  const [debugSpeed, setDebugSpeed] = useState(500);
 
-  const handleUseLevelResult = (result: any) => {
-    if (result && result.map) {
-      setCurrentMap({
-        width: result.map.width,
-        height: result.map.height,
-        cells: result.map.cells.map((cell: any) => ({
-          x: cell.x,
-          y: cell.y,
-          type: cell.type,
-          dir: cell.dir,
-        })),
-        stars: result.map.stars.map((star: any) => ({
-          x: star.x,
-          y: star.y,
-          type: "star",
-        })),
-      });
-
-      const robotCell = result.map.cells.find((cell: any) => cell.type === "robot");
-      if (robotCell) {
-        const newRobot = { x: robotCell.x, y: robotCell.y, dir: robotCell.dir || "right" };
-        setRobot(newRobot);
-        setDebugRobot(newRobot);
-      }
-    }
-  };
-
-  const handleUseSolverResult = (result: any) => {
-    if (result && result.commands) {
-      const newCommands = result.commands.map((cmd: any) => ({
-        ...cmd,
-        id: `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      }));
-      setCommands(newCommands);
-    }
-  };
-
-  const handleAutoSolve = async () => {
-    if (!settings.enableAutoSolve) {
-      message.warning("AI 自动解题功能已禁用，请在设置中开启");
-      return;
-    }
-
-    if (isDailyLimitReached()) {
-      message.warning("今日 Token 使用已达上限，请明天再试");
-      return;
-    }
-
-    const robotCell = currentMap.cells.find((cell) => cell.type === "robot");
-    const goalCell = currentMap.cells.find((cell) => cell.type === "goal");
-
-    if (!robotCell || !goalCell) {
-      message.error("无法找到机器人或目标位置");
-      return;
-    }
-
-    setShowSolveModal(true);
-
-    try {
-      const result = await solve({
-        map: currentMap,
-        startX: robotCell.x,
-        startY: robotCell.y,
-        startDir: robotCell.dir || "right",
-        goalX: goalCell.x,
-        goalY: goalCell.y,
-      });
-
-      if (result) {
-        handleUseSolverResult(result);
-        message.success("AI 解题成功！");
-        if (result.explanation) {
-          message.info(result.explanation);
-        }
-      } else if (error) {
-        message.error(error);
-      }
-    } catch (err) {
-      message.error("AI 解题失败，请重试");
-    } finally {
-      setShowSolveModal(false);
-    }
-  };
-
-  // 程序保存/加载相关状态
+  // 程序保存 / 加载
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showLoadDialog, setShowLoadDialog] = useState(false);
-  const [programName, setProgramName] = useState("");
+  const [programName, setProgramName] = useState('');
   const [savedPrograms, setSavedPrograms] = useState<SavedProgram[]>([]);
 
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
+
+  const { solve } = useAIAutoSolver();
+  const { settings, isGenerating, isDailyLimitReached } = useAIStore();
+
+  const initializedLevelRef = useRef(false);
+  const runTokenRef = useRef(0);
+  const runTimerRef = useRef<number | null>(null);
+  const debugGeneratorRef = useRef<Generator<
+    ExecutionStep,
+    ExecutionResult,
+    void
+  > | null>(null);
+  const continueDebugRef = useRef(false);
+  const breakpointsRef = useRef(new Set<string>());
+  const commandsRef = useRef(commands);
+  const levelStartRef = useRef(Date.now());
+  const runningRef = useRef(false);
+
   useEffect(() => {
-    const interval = setInterval(() => {
-      setAllLevelsCount(getAllLevels().length);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+    commandsRef.current = commands;
+  }, [commands]);
+
+  // 关卡切换（包括上一关 / 下一关）时重置运行、调试与预览状态
+  const previousLevelIdRef = useRef(currentLevelData.id);
+  useEffect(() => {
+    if (previousLevelIdRef.current === currentLevelData.id) return;
+    previousLevelIdRef.current = currentLevelData.id;
+
+    runTokenRef.current++;
+    runningRef.current = false;
+    continueDebugRef.current = false;
+    if (runTimerRef.current !== null) {
+      window.clearTimeout(runTimerRef.current);
+      runTimerRef.current = null;
+    }
+    debugGeneratorRef.current = null;
+    setIsDebugging(false);
+    setDebugCommandId(null);
+    setDebugLogs([]);
+    setDebugStars([]);
+    setDebugRobot(getStartRobot(useGameStore.getState().currentMap));
+    setBreakpoints([]);
+    breakpointsRef.current = new Set();
+    setIsRunning(false);
+    levelStartRef.current = Date.now();
+    setShowDemoPrompt(!!currentLevelData.demoProgram);
+    setAllLevelsCount(getAllLevels().length);
+  }, [currentLevelData.id, currentLevelData.demoProgram, setIsRunning]);
+
+  const loadSavedPrograms = useCallback(() => {
+    setSavedPrograms(programStorage.getByLevel(currentLevelData.id));
+  }, [currentLevelData.id]);
 
   useEffect(() => {
     loadSavedPrograms();
-  }, [currentLevelData.id]);
+  }, [loadSavedPrograms]);
 
-  const loadSavedPrograms = useCallback(() => {
-    const programs = programStorage.getByLevel(currentLevelData.id);
-    setSavedPrograms(programs);
-  }, [currentLevelData.id]);
+  // 根据 URL / 已保存进度加载关卡（只在关卡真正变化时重置）
+  useEffect(() => {
+    const allLevels = getAllLevels();
+    const levelIdParam = searchParams.get('level');
+    const requested = levelIdParam
+      ? allLevels.find(
+          (level) =>
+            level.id === levelIdParam ||
+            level.id === `level_0${levelIdParam}` ||
+            level.id === `level_${levelIdParam.padStart(2, '0')}`,
+        )
+      : undefined;
+    const savedLevel =
+      allLevels[Math.min(progressStorage.getCurrentLevelIndex(), allLevels.length - 1)] ??
+      levels[0];
+    const level = requested ?? savedLevel;
+
+    const currentLevelId = useGameStore.getState().currentLevelData.id;
+    if (!initializedLevelRef.current || level.id !== currentLevelId) {
+      loadLevel(level);
+      levelStartRef.current = Date.now();
+      continueDebugRef.current = false;
+      debugGeneratorRef.current = null;
+      setIsDebugging(false);
+      setDebugLogs([]);
+      setDebugCommandId(null);
+      setBreakpoints([]);
+      breakpointsRef.current = new Set();
+      setShowDemoPrompt(
+        !!level.demoProgram && useGameStore.getState().commands.length === 0,
+      );
+    }
+    initializedLevelRef.current = true;
+    setAllLevelsCount(allLevels.length);
+  }, [searchParams, loadLevel]);
+
+  // 同步 URL 中的 level 参数
+  useEffect(() => {
+    const level = getAllLevels()[currentLevelIndex];
+    if (!level) return;
+    if (searchParams.get('level') !== level.id) {
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.set('level', level.id);
+      navigate({ search: nextParams.toString() }, { replace: true });
+    }
+  }, [currentLevelIndex, searchParams, navigate]);
+
+  // 清理运行中的定时器与调试状态
+  useEffect(
+    () => () => {
+      runTokenRef.current++;
+      continueDebugRef.current = false;
+      if (runTimerRef.current !== null) {
+        window.clearTimeout(runTimerRef.current);
+        runTimerRef.current = null;
+      }
+      debugGeneratorRef.current = null;
+      useGameStore.getState().setIsRunning(false);
+    },
+    [],
+  );
+
+  // 记录游戏时长
+  useEffect(() => {
+    const timer = window.setInterval(() => statsStorage.addPlayTime(30), 30_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const handleSaveProgram = useCallback(() => {
     if (commands.length === 0) {
-      setNotification({ message: "请先添加指令", type: "warning" });
+      setNotification({ message: '请先添加指令', type: 'warning' });
       return;
     }
-
     if (!programName.trim()) {
-      setNotification({ message: "请输入程序名称", type: "warning" });
+      setNotification({ message: '请输入程序名称', type: 'warning' });
       return;
     }
 
     const program: SavedProgram = {
-      id: `program_${Date.now()}`,
+      id: `program_${generateId()}`,
       name: programName.trim(),
-      commands: deepCopyCommands(commands),
+      commands: cloneCommands(commands),
       levelId: currentLevelData.id,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -216,448 +297,158 @@ const Game: React.FC = () => {
 
     programStorage.save(program);
     setShowSaveDialog(false);
-    setProgramName("");
+    setProgramName('');
     loadSavedPrograms();
-    setNotification({ message: "程序保存成功！", type: "success" });
+    setNotification({ message: '程序保存成功！', type: 'success' });
   }, [commands, programName, currentLevelData.id, loadSavedPrograms]);
 
   const handleLoadProgram = useCallback(
     (program: SavedProgram) => {
-      setCommands(deepCopyCommands(program.commands));
+      commitCommands(cloneCommands(program.commands));
+      resetPreview();
       setShowLoadDialog(false);
-      setNotification({ message: `已加载程序: ${program.name}`, type: "success" });
+      setNotification({ message: `已加载程序: ${program.name}`, type: 'success' });
     },
-    [setCommands],
+    [commitCommands, resetPreview],
   );
 
   const handleDeleteProgram = useCallback(
     (programId: string) => {
       programStorage.delete(programId);
       loadSavedPrograms();
-      setNotification({ message: "程序已删除", type: "info" });
+      setNotification({ message: '程序已删除', type: 'info' });
     },
     [loadSavedPrograms],
   );
 
-  useEffect(() => {
-    const levelIdParam = searchParams.get("level");
-    const allCurrentLevels = getAllLevels();
-
-    let level;
-    if (levelIdParam) {
-      level = allCurrentLevels.find(
-        (l) => l.id === levelIdParam || l.id === `level_0${levelIdParam}` || l.id === `level_${levelIdParam.padStart(2, "0")}`,
-      );
-    }
-
-    if (!level) {
-      level = allCurrentLevels[0] || levels[0];
-    }
-
-    const levelIndex = allCurrentLevels.findIndex((l) => l.id === level.id);
-    setCurrentLevelIndex(levelIndex !== -1 ? levelIndex : 0);
-    setCurrentLevelData(level);
-    setCurrentMap(level.map);
-
-    const robotCell = level.map.cells.find((cell) => cell.type === "robot");
-    if (robotCell) {
-      const newRobot = { x: robotCell.x, y: robotCell.y, dir: robotCell.dir || "right" };
-      setRobot(newRobot);
-      setDebugRobot(newRobot);
-    }
-
-    setShowDemoPrompt(!!level.demoProgram && commands.length === 0);
-  }, [searchParams]);
-
-  useEffect(() => {
-    const allCurrentLevels = getAllLevels();
-    const level = allCurrentLevels[currentLevelIndex];
-    if (level) {
-      const searchParams = new URLSearchParams(location.search);
-      searchParams.set("level", level.id);
-      navigate(`?${searchParams.toString()}`, { replace: true });
-    }
-  }, [currentLevelIndex, location.search, navigate]);
-
   const handleUndo = useCallback(() => {
-    const result = undo();
-    if (result) {
-      setNotification({ message: "已撤销", type: "info" });
+    if (undo()) {
+      setNotification({ message: '已撤销', type: 'info' });
     }
   }, [undo]);
 
   const handleRedo = useCallback(() => {
-    const result = redo();
-    if (result) {
-      setNotification({ message: "已重做", type: "info" });
+    if (redo()) {
+      setNotification({ message: '已重做', type: 'info' });
     }
   }, [redo]);
 
   const loadDemoProgram = useCallback(() => {
-    if (currentLevelData.demoProgram) {
-      const deepClonedDemo = currentLevelData.demoProgram.map((cmd) => ({
-        ...cmd,
-        id: generateId(),
-        children: cmd.children?.map((child) => ({ ...child, id: generateId() })),
-      }));
-
-      setCommands(deepClonedDemo);
-      setShowDemoPrompt(false);
-      setNotification({ message: "已加载演示程序！包含所有指令类型的使用示例。", type: "success" });
-    }
-  }, [currentLevelData, setCommands]);
+    const demo = currentLevelData.demoProgram;
+    if (!demo) return;
+    commitCommands(demo.map(cloneCommandWithNewIds));
+    resetPreview();
+    setShowDemoPrompt(false);
+    setNotification({ message: '已加载演示程序！', type: 'success' });
+  }, [currentLevelData, commitCommands, resetPreview]);
 
   const handleAddCommand = useCallback(
     (command: Command) => {
-      const newCommand = {
-        ...command,
-        id: `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        children: command.children ? [...command.children] : undefined,
-      };
+      const newCommand = cloneCommandWithNewIds(command);
+      const nextCommands = [...commands, newCommand];
       addCommand(newCommand);
 
-      const currentRobotState = { ...robot };
-      const currentCollectedStars = [...collectedStars];
+      const startRobot = getStartRobot(currentMap);
+      const preview = simulateProgram(nextCommands, startRobot, currentMap);
+      setRobot(preview.robot);
+      setCollectedStars(starsToPositions(preview.collectedStars));
 
-      const result = executeCommand(newCommand, currentRobotState, currentMap, 0);
-      const { success, robot: updatedRobot, message } = result;
-
-      if (success) {
-        setExecutionHistory([...executionHistory, { robot: currentRobotState, collectedStars: currentCollectedStars }]);
-
-        const startRobot = { ...currentRobotState };
-        const animateRobot = (targetRobot: typeof updatedRobot, step = 0) => {
-          if (step < 10) {
-            const progress = step / 10;
-            const newX = startRobot.x + (targetRobot.x - startRobot.x) * progress;
-            const newY = startRobot.y + (targetRobot.y - startRobot.y) * progress;
-            setRobot({ x: newX, y: newY, dir: targetRobot.dir });
-            setTimeout(() => animateRobot(targetRobot, step + 1), 50);
-          } else {
-            setRobot(updatedRobot);
-          }
-        };
-
-        animateRobot(updatedRobot);
-      } else {
-        setNotification({ message, type: "error" });
+      if (!preview.success && preview.message === '机器人撞墙了！') {
+        setNotification({ message: preview.message, type: 'error' });
       }
     },
-    [robot, collectedStars, currentMap, addCommand, setRobot, executionHistory],
+    [commands, currentMap, addCommand, setRobot, setCollectedStars],
   );
 
   const handleRemoveCommand = useCallback(
     (id: string) => {
       removeCommand(id);
-
-      if (executionHistory.length > 0) {
-        const lastExecution = executionHistory[executionHistory.length - 1];
-        setExecutionHistory(executionHistory.slice(0, -1));
-        setRobot(lastExecution.robot);
-        setCollectedStars(lastExecution.collectedStars);
-      } else {
-        const initialRobot = {
-          x: currentMap.cells.find((cell) => cell.type === "robot")?.x || 0,
-          y: currentMap.cells.find((cell) => cell.type === "robot")?.y || 0,
-          dir: currentMap.cells.find((cell) => cell.type === "robot")?.dir || "right",
-        };
-        setRobot(initialRobot);
-        setCollectedStars([]);
-      }
+      resetPreview();
     },
-    [removeCommand, executionHistory, setRobot, setCollectedStars, currentMap],
+    [removeCommand, resetPreview],
   );
 
   const handleAddChild = useCallback(
-    (parentId: string, childCommand: Command, branch: "children" | "elseChildren" = "children") => {
-      let found = false;
-
-      const addChildCommand = (cmds: Command[]): Command[] => {
-        return cmds.map((cmd) => {
-          if (cmd.id === parentId) {
-            found = true;
-            const newChild: Command = {
-              ...childCommand,
-              id: `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-              children: childCommand.children ? [...childCommand.children] : undefined,
-            };
-            if (branch === "children") {
-              console.log("✅ handleAddChild:", {
-                parentType: cmd.type,
-                childType: childCommand.type,
-                branch,
-              });
-              return { ...cmd, children: [...(cmd.children || []), newChild] };
-            } else {
-              console.log("✅ handleAddChild:", {
-                parentType: cmd.type,
-                childType: childCommand.type,
-                branch,
-              });
-              return { ...cmd, elseChildren: [...(cmd.elseChildren || []), newChild] };
-            }
-          }
-          if (cmd.children) {
-            const updated = addChildCommand(cmd.children);
-            if (updated !== cmd.children) {
-              return { ...cmd, children: updated };
-            }
-          }
-          if (cmd.elseChildren) {
-            const updated = addChildCommand(cmd.elseChildren);
-            if (updated !== cmd.elseChildren) {
-              return { ...cmd, elseChildren: updated };
-            }
-          }
-          return cmd;
-        });
-      };
-
-      const newCommands = addChildCommand(commands);
-
-      if (!found) {
-        console.warn("❌ handleAddChild: Parent not found", parentId);
-      }
-
-      setCommands(newCommands);
+    (parentId: string, childCommand: Command, branch: CommandBranch = 'children') => {
+      const child = cloneCommandWithNewIds(childCommand);
+      commitCommands(appendChildCommand(commands, parentId, child, branch));
+      resetPreview();
     },
-    [commands, setCommands],
+    [commands, commitCommands, resetPreview],
   );
 
   const handleUpdateCommand = useCallback(
     (id: string, updates: Partial<Command>) => {
-      const updateCommand = (cmds: Command[]): Command[] => {
-        return cmds.map((cmd) => {
-          if (cmd.id === id) {
-            return { ...cmd, ...updates };
-          }
-          if (cmd.children) {
-            return { ...cmd, children: updateCommand(cmd.children) };
-          }
-          return cmd;
-        });
-      };
-      const newCommands = updateCommand(commands);
-      setCommands(newCommands);
+      commitCommands(updateCommandInTree(commands, id, updates));
+      resetPreview();
     },
-    [commands, setCommands],
+    [commands, commitCommands, resetPreview],
   );
 
   const handleCopyCommand = useCallback(
     (command: Command) => {
-      const copyCommand = (cmd: Command): Command => {
-        const newCmd = { ...cmd, id: `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` };
-        if (cmd.children) {
-          newCmd.children = cmd.children.map(copyCommand);
-        }
-        return newCmd;
-      };
-      const newCommand = copyCommand(command);
-      setCommands([...commands, newCommand]);
-      setNotification({ message: "已复制指令", type: "success" });
+      commitCommands(duplicateCommandInTree(commands, command.id));
+      resetPreview();
+      setNotification({ message: '已复制指令', type: 'success' });
     },
-    [commands, setCommands],
+    [commands, commitCommands, resetPreview],
   );
 
   const handleMoveUp = useCallback(
     (id: string) => {
-      const moveCommand = (cmds: Command[]): Command[] => {
-        const index = cmds.findIndex((cmd) => cmd.id === id);
-        if (index > 0) {
-          const newCmds = [...cmds];
-          [newCmds[index - 1], newCmds[index]] = [newCmds[index], newCmds[index - 1]];
-          return newCmds;
-        }
-        return cmds.map((cmd) => (cmd.children ? { ...cmd, children: moveCommand(cmd.children) } : cmd));
-      };
-      const newCommands = moveCommand(commands);
-      setCommands(newCommands);
+      commitCommands(moveCommandByOffset(commands, id, -1));
+      resetPreview();
     },
-    [commands, setCommands],
+    [commands, commitCommands, resetPreview],
   );
 
   const handleMoveDown = useCallback(
     (id: string) => {
-      const moveCommand = (cmds: Command[]): Command[] => {
-        const index = cmds.findIndex((cmd) => cmd.id === id);
-        if (index >= 0 && index < cmds.length - 1) {
-          const newCmds = [...cmds];
-          [newCmds[index], newCmds[index + 1]] = [newCmds[index + 1], newCmds[index]];
-          return newCmds;
-        }
-        return cmds.map((cmd) => (cmd.children ? { ...cmd, children: moveCommand(cmd.children) } : cmd));
-      };
-      const newCommands = moveCommand(commands);
-      setCommands(newCommands);
+      commitCommands(moveCommandByOffset(commands, id, 1));
+      resetPreview();
     },
-    [commands, setCommands],
+    [commands, commitCommands, resetPreview],
   );
 
   const handleDropBefore = useCallback(
-    (index: number, draggedItem: { command: Command; isFromPanel: boolean }) => {
-      const newCommand = draggedItem.isFromPanel
-        ? { ...draggedItem.command, id: `cmd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}` }
-        : draggedItem.command;
-
-      const moveAndInsert = (cmds: Command[]): Command[] => {
-        const removeById = (list: Command[]): Command[] => {
-          return list.filter((cmd) => {
-            if (cmd.id === draggedItem.command.id) return false;
-            if (cmd.children) {
-              cmd.children = removeById(cmd.children);
-            }
-            return true;
-          });
-        };
-
-        const withoutDragged = removeById(cmds);
-        const insertAtIndex = (list: Command[], targetIndex: number, item: Command): Command[] => {
-          const result: Command[] = [];
-          let inserted = false;
-          let currentIndex = 0;
-
-          for (const cmd of list) {
-            if (currentIndex === targetIndex && !inserted) {
-              result.push(item);
-              inserted = true;
-            }
-            result.push(cmd.children ? { ...cmd, children: insertAtIndex(cmd.children, targetIndex, item) } : cmd);
-            currentIndex++;
-          }
-
-          if (!inserted && currentIndex === targetIndex) {
-            result.push(item);
-          }
-
-          return result;
-        };
-
-        return insertAtIndex(withoutDragged, index, newCommand);
-      };
-
-      const newCommands = moveAndInsert(commands);
-      setCommands(newCommands);
+    (location: CommandLocation, draggedItem: DraggedCommand) => {
+      const next = moveOrInsertCommand(commands, location, draggedItem);
+      if (next !== commands) {
+        commitCommands(next);
+        resetPreview();
+      }
     },
-    [commands, setCommands],
+    [commands, commitCommands, resetPreview],
   );
 
   const handleDropAfter = useCallback(
-    (index: number, draggedItem: { command: Command; isFromPanel: boolean }) => {
-      handleDropBefore(index + 1, draggedItem);
+    (location: CommandLocation, draggedItem: DraggedCommand) => {
+      handleDropBefore({ ...location, index: location.index + 1 }, draggedItem);
     },
     [handleDropBefore],
   );
 
-  const handleStartDebug = useCallback(() => {
-    const robotCell = currentMap.cells.find((cell) => cell.type === "robot");
-    if (robotCell) {
-      setDebugRobot({ x: robotCell.x, y: robotCell.y, dir: robotCell.dir || "right" });
-    }
-    setDebugCollectedStars(0);
-    setCurrentStep(0);
-    setExecutionLog([]);
-    setDebugSteps(flattenCommands(commands));
-    setIsDebugging(true);
-  }, [currentMap, commands, setDebugRobot]);
-
-  const handleStepDebug = useCallback(() => {
-    if (!isDebugging || currentStep >= debugSteps.length) return;
-
-    const currentDebugStep = debugSteps[currentStep];
-    const cmd = currentDebugStep.command;
-
-    if (breakpoints.includes(cmd.id)) {
-      setExecutionLog([...executionLog, `断点: ${getCommandLabel(cmd)}`]);
-      return;
-    }
-
-    const result = executeCommand(cmd, debugRobot, currentMap, debugCollectedStars);
-    const { success, robot: updatedRobot, collectedStars: updatedCollectedStars, message } = result;
-
-    if (updatedRobot.x !== debugRobot.x || updatedRobot.y !== debugRobot.y) {
-      setDebugRobot(updatedRobot);
-    }
-    if (updatedCollectedStars !== debugCollectedStars) {
-      setDebugCollectedStars(updatedCollectedStars);
-    }
-
-    setExecutionLog([...executionLog, `第${currentStep + 1}步: ${getCommandLabel(cmd)} → ${message}`]);
-
-    if (!success) {
-      setIsDebugging(false);
-      setNotification({ message, type: "error" });
-      return;
-    }
-
-    const nextStep = currentStep + 1;
-    setCurrentStep(nextStep);
-
-    if (nextStep >= debugSteps.length) {
-      setIsDebugging(false);
-      const atGoal = currentMap.cells.some((cell) => cell.type === "goal" && cell.x === updatedRobot.x && cell.y === updatedRobot.y);
-      const allStarsCollected = updatedCollectedStars >= currentMap.stars.length;
-
-      if (atGoal && allStarsCollected) {
-        setExecutionLog([...executionLog, "恭喜你过关了！"]);
-        setNotification({ message: "恭喜你过关了！", type: "success" });
-      } else if (!atGoal) {
-        setExecutionLog([...executionLog, "机器人没有到达终点！"]);
-        setNotification({ message: "机器人没有到达终点！", type: "error" });
-      } else if (updatedCollectedStars < currentMap.stars.length) {
-        setExecutionLog([...executionLog, "还有星星没有收集！"]);
-        setNotification({ message: "还有星星没有收集！", type: "error" });
-      }
-    }
-  }, [isDebugging, currentStep, debugSteps, breakpoints, debugRobot, currentMap, debugCollectedStars, executionLog]);
-
-  const handleContinueDebug = useCallback(() => {
-    const autoStep = () => {
-      if (!isDebugging || currentStep >= debugSteps.length) return;
-      const currentDebugStep = debugSteps[currentStep];
-      if (breakpoints.includes(currentDebugStep.command.id)) return;
-      handleStepDebug();
-      setTimeout(autoStep, debugSpeed);
-    };
-    autoStep();
-  }, [isDebugging, currentStep, debugSteps, breakpoints, handleStepDebug, debugSpeed]);
-
-  const handleStopDebug = useCallback(() => {
-    setIsDebugging(false);
-    setCurrentStep(0);
-    setExecutionLog([]);
-  }, []);
-
-  const handleToggleBreakpoint = useCallback(
-    (commandId: string) => {
-      if (breakpoints.includes(commandId)) {
-        setBreakpoints(breakpoints.filter((id) => id !== commandId));
-      } else {
-        setBreakpoints([...breakpoints, commandId]);
-      }
-    },
-    [breakpoints],
-  );
-
   const handleLevelComplete = useCallback(
-    (starsCollected: number, commandsUsed: number) => {
+    (commandsUsed: number, elapsedMs: number) => {
       playLevelUpSound();
 
       const level = currentLevelData;
+      const previous = progressStorage.getLevelProgress(level.id);
+      progressStorage.completeLevel(level.id, level.map.stars.length, commandsUsed);
 
-      progressStorage.completeLevel(level.id, starsCollected, commandsUsed);
-
-      const isPerfect = starsCollected >= level.map.stars.length && commandsUsed <= (level.minCommands || 1);
-      if (isPerfect) {
+      const isPerfect = commandsUsed <= (level.minCommands || 1);
+      if (isPerfect && !previous?.completed) {
         statsStorage.recordPerfectLevel();
+      }
+      if (!previous?.completed && elapsedMs < 60_000) {
+        statsStorage.recordSpeedRun();
       }
 
       statsStorage.updateConsecutiveDays();
 
       const updatedStats = statsStorage.get();
-      const achievements = checkAchievements(updatedStats);
       const unlockedIds = achievementStorage.getUnlockedIds();
-
-      achievements.forEach((achievement) => {
+      checkAchievements(updatedStats).forEach((achievement) => {
         if (!unlockedIds.includes(achievement.id)) {
           achievementStorage.unlock(achievement);
           setShowAchievementNotification(achievement);
@@ -667,231 +458,229 @@ const Game: React.FC = () => {
     [currentLevelData],
   );
 
-  const handleRunProgram = useCallback(() => {
-    setIsRunning(true);
-    setCollectedStars([]);
+  const handleRunProgram = useCallback(async () => {
+    if (runningRef.current || isRunning || isDebugging || commands.length === 0) return;
+    runningRef.current = true;
 
-    const robotCell = currentMap.cells.find((cell) => cell.type === "robot");
-    if (robotCell) {
-      setRobot({ x: robotCell.x, y: robotCell.y, dir: robotCell.dir || "right" });
+    const token = ++runTokenRef.current;
+    progressStorage.incrementAttempts(currentLevelData.id);
+    const startRobot = getStartRobot(currentMap);
+    resetPreview();
+    setIsRunning(true);
+
+    const generator = runProgram(commands, startRobot, currentMap);
+    let result: ExecutionResult | null = null;
+
+    try {
+      for (;;) {
+        const next = generator.next();
+        if (next.done) {
+          result = next.value;
+          break;
+        }
+        const step = next.value;
+        setRobot(step.robot);
+        setCollectedStars(starsToPositions(step.collectedStars));
+        await sleep(step.control ? 120 : 240);
+        if (runTokenRef.current !== token) return;
+      }
+    } finally {
+      if (runTokenRef.current === token) {
+        setIsRunning(false);
+      }
+      runningRef.current = false;
     }
 
-    const initialRobot = {
-      x: currentMap.cells.find((cell) => cell.type === "robot")?.x || 0,
-      y: currentMap.cells.find((cell) => cell.type === "robot")?.y || 0,
-      dir: currentMap.cells.find((cell) => cell.type === "robot")?.dir || "right",
-    };
+    if (!result || runTokenRef.current !== token) return;
 
-    let currentRobot = { ...initialRobot };
-    let collectedStarsCount = 0;
-    let collectedStarsPositions: { x: number; y: number }[] = [];
-    let success = true;
-    let message = "";
+    setNotification({
+      message: result.message,
+      type: result.success ? 'success' : 'error',
+    });
+    if (result.success) {
+      handleLevelComplete(commands.length, Date.now() - levelStartRef.current);
+    }
+  }, [
+    isRunning,
+    isDebugging,
+    commands,
+    currentMap,
+    resetPreview,
+    setIsRunning,
+    setRobot,
+    setCollectedStars,
+    handleLevelComplete,
+    currentLevelData.id,
+  ]);
 
-    const executeRecursive = async (cmd: Command): Promise<boolean> => {
-      return new Promise(async (resolve) => {
-        switch (cmd.type) {
-          case "forward":
-          case "left":
-          case "right":
-          case "collect":
-          case "wait":
-          case "randomTurn":
-            const result = executeCommand(cmd, currentRobot, currentMap, collectedStarsCount);
-            if (!result.success) {
-              success = false;
-              message = result.message;
-              resolve(false);
-              return;
-            }
+  const stepDebugOnce = useCallback((): ExecutionStep | ExecutionResult | null => {
+    const generator = debugGeneratorRef.current;
+    if (!generator) return null;
 
-            const startRobot = { ...currentRobot };
-            const updatedRobot = result.robot;
-            const updatedCollectedStars = result.collectedStars;
-
-            const animateRobot = (step = 0) => {
-              if (step < 10) {
-                const progress = step / 10;
-                const newX = startRobot.x + (updatedRobot.x - startRobot.x) * progress;
-                const newY = startRobot.y + (updatedRobot.y - startRobot.y) * progress;
-                setRobot({ x: newX, y: newY, dir: updatedRobot.dir });
-                setTimeout(() => animateRobot(step + 1), 50);
-              } else {
-                setRobot(updatedRobot);
-                currentRobot = updatedRobot;
-
-                if (updatedCollectedStars > collectedStarsCount) {
-                  const starAtCurrentPosition = currentMap.stars.find((star) => star.x === updatedRobot.x && star.y === updatedRobot.y);
-                  if (starAtCurrentPosition) {
-                    setTimeout(() => {
-                      collectedStarsPositions.push({ x: updatedRobot.x, y: updatedRobot.y });
-                      setCollectedStars([...collectedStarsPositions]);
-                    }, 500);
-                  }
-                }
-
-                collectedStarsCount = updatedCollectedStars;
-                setTimeout(() => resolve(true), 300);
-              }
-            };
-            animateRobot();
-            break;
-
-          case "loop":
-            const times = cmd.params?.times || 2;
-            let loopSuccess = true;
-            for (let i = 0; i < times; i++) {
-              if (cmd.children) {
-                for (const childCmd of cmd.children) {
-                  const childResult = await executeRecursive(childCmd);
-                  if (!childResult) {
-                    loopSuccess = false;
-                    break;
-                  }
-                }
-              }
-              if (!loopSuccess) break;
-            }
-            resolve(loopSuccess);
-            break;
-
-          case "if": {
-            const condition = cmd.params?.condition as ConditionType;
-            let conditionMet = false;
-
-            if (condition === "frontBlocked") {
-              const directionOffset: Record<Direction, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-              const [dx, dy] = directionOffset[currentRobot.dir];
-              conditionMet = !isValidPosition(currentRobot.x + dx, currentRobot.y + dy, currentMap);
-            } else if (condition === "leftBlocked") {
-              const leftDir: Record<Direction, Direction> = { up: "left", left: "down", down: "right", right: "up" };
-              const directionOffset: Record<Direction, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-              const [dx, dy] = directionOffset[leftDir[currentRobot.dir]];
-              conditionMet = !isValidPosition(currentRobot.x + dx, currentRobot.y + dy, currentMap);
-            } else if (condition === "rightBlocked") {
-              const rightDir: Record<Direction, Direction> = { up: "right", right: "down", down: "left", left: "up" };
-              const directionOffset: Record<Direction, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-              const [dx, dy] = directionOffset[rightDir[currentRobot.dir]];
-              conditionMet = !isValidPosition(currentRobot.x + dx, currentRobot.y + dy, currentMap);
-            } else if (condition === "hasStar") {
-              conditionMet = collectedStarsCount > 0;
-            } else if (condition === "nearGoal") {
-              const goal = currentMap.cells.find((cell) => cell.type === "goal");
-              if (goal) {
-                const distance = Math.abs(currentRobot.x - goal.x) + Math.abs(currentRobot.y - goal.y);
-                conditionMet = distance <= 2;
-              }
-            }
-
-            if (conditionMet) {
-              if (cmd.children) {
-                let ifSuccess = true;
-                for (const childCmd of cmd.children) {
-                  const childResult = await executeRecursive(childCmd);
-                  if (!childResult) {
-                    ifSuccess = false;
-                    break;
-                  }
-                }
-                resolve(ifSuccess);
-                return;
-              }
-            } else {
-              // 执行else分支
-              if (cmd.elseChildren) {
-                let elseSuccess = true;
-                for (const childCmd of cmd.elseChildren) {
-                  const childResult = await executeRecursive(childCmd);
-                  if (!childResult) {
-                    elseSuccess = false;
-                    break;
-                  }
-                }
-                resolve(elseSuccess);
-                return;
-              }
-            }
-            resolve(true);
-            break;
-          }
-
-          case "repeatUntil":
-            if (cmd.children) {
-              const repeatCondition = cmd.params?.condition;
-              let repeatConditionMet = false;
-
-              while (!repeatConditionMet) {
-                let repeatSuccess = true;
-                for (const childCmd of cmd.children) {
-                  const childResult = await executeRecursive(childCmd);
-                  if (!childResult) {
-                    repeatSuccess = false;
-                    break;
-                  }
-                }
-
-                if (!repeatSuccess) {
-                  resolve(false);
-                  return;
-                }
-
-                if (repeatCondition === "hasStar") {
-                  repeatConditionMet = collectedStarsCount > 0;
-                } else if (repeatCondition === "frontBlocked") {
-                  const directionOffset: Record<Direction, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-                  const [dx, dy] = directionOffset[currentRobot.dir];
-                  repeatConditionMet = !isValidPosition(currentRobot.x + dx, currentRobot.y + dy, currentMap);
-                } else if (repeatCondition === "edgeInFront") {
-                  const directionOffset: Record<Direction, [number, number]> = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
-                  const [dx, dy] = directionOffset[currentRobot.dir];
-                  const nextX = currentRobot.x + dx;
-                  const nextY = currentRobot.y + dy;
-                  repeatConditionMet = nextX < 0 || nextX >= currentMap.width || nextY < 0 || nextY >= currentMap.height;
-                } else if (repeatCondition === "nearGoal") {
-                  const goal = currentMap.cells.find((cell) => cell.type === "goal");
-                  if (goal) {
-                    const distance = Math.abs(currentRobot.x - goal.x) + Math.abs(currentRobot.y - goal.y);
-                    repeatConditionMet = distance <= 2;
-                  }
-                }
-              }
-            }
-            resolve(true);
-            break;
-        }
+    const next = generator.next();
+    if (next.done) {
+      debugGeneratorRef.current = null;
+      setIsDebugging(false);
+      setDebugCommandId(null);
+      setDebugRobot(next.value.robot);
+      setDebugStars(starsToPositions(next.value.collectedStars));
+      setRobot(next.value.robot);
+      setCollectedStars(starsToPositions(next.value.collectedStars));
+      setDebugLogs((logs) => [...logs, next.value.message].slice(-500));
+      setNotification({
+        message: next.value.message,
+        type: next.value.success ? 'success' : 'error',
       });
+      if (next.value.success) {
+        handleLevelComplete(
+          commandsRef.current.length,
+          Date.now() - levelStartRef.current,
+        );
+      }
+      return next.value;
+    }
+
+    const step = next.value;
+    setDebugRobot(step.robot);
+    setDebugStars(starsToPositions(step.collectedStars));
+    setDebugCommandId(step.commandId);
+    setDebugLogs((logs) => [...logs, `${step.control ? '▶ ' : ''}${step.message}`].slice(-500));
+    if (step.paused) {
+      setNotification({ message: step.message, type: 'info' });
+    }
+    return step;
+  }, [handleLevelComplete, setRobot, setCollectedStars]);
+
+  const handleStartDebug = useCallback(() => {
+    if (isRunning) return;
+    runTokenRef.current++;
+    continueDebugRef.current = false;
+    if (runTimerRef.current !== null) {
+      window.clearTimeout(runTimerRef.current);
+      runTimerRef.current = null;
+    }
+
+    const startRobot = getStartRobot(currentMap);
+    resetPreview();
+    setDebugRobot(startRobot);
+    setDebugStars([]);
+    setDebugLogs([]);
+    setDebugCommandId(null);
+    setIsDebugging(true);
+    breakpointsRef.current = new Set(breakpoints);
+    debugGeneratorRef.current = runProgram(commands, startRobot, currentMap, [], {
+      breakpoints: breakpointsRef.current,
+    });
+  }, [isRunning, currentMap, resetPreview, commands, breakpoints]);
+
+  const handleStepDebug = useCallback(() => {
+    if (!isDebugging) return;
+    stepDebugOnce();
+  }, [isDebugging, stepDebugOnce]);
+
+  const handleContinueDebug = useCallback(() => {
+    if (!isDebugging || !debugGeneratorRef.current) return;
+    continueDebugRef.current = true;
+
+    const tick = () => {
+      if (!continueDebugRef.current || !debugGeneratorRef.current) return;
+      const step = stepDebugOnce();
+      if (!step || !debugGeneratorRef.current) {
+        continueDebugRef.current = false;
+        return;
+      }
+      if ('paused' in step && step.paused) {
+        continueDebugRef.current = false;
+        return;
+      }
+      runTimerRef.current = window.setTimeout(tick, debugSpeed);
     };
 
-    const runProgram = async () => {
-      for (const cmd of commands) {
-        const result = await executeRecursive(cmd);
-        if (!result) break;
+    tick();
+  }, [isDebugging, stepDebugOnce, debugSpeed]);
+
+  const handleStopDebug = useCallback(() => {
+    continueDebugRef.current = false;
+    if (runTimerRef.current !== null) {
+      window.clearTimeout(runTimerRef.current);
+      runTimerRef.current = null;
+    }
+    debugGeneratorRef.current = null;
+    setIsDebugging(false);
+    setDebugCommandId(null);
+    setDebugLogs([]);
+    resetPreview();
+  }, [resetPreview]);
+
+  const handleToggleBreakpoint = useCallback((commandId: string) => {
+    setBreakpoints((current) => {
+      const next = current.includes(commandId)
+        ? current.filter((id) => id !== commandId)
+        : [...current, commandId];
+      // 原地更新 generator 使用的 Set，确保调试开始后切换断点仍然生效
+      if (breakpointsRef.current.has(commandId)) {
+        breakpointsRef.current.delete(commandId);
+      } else {
+        breakpointsRef.current.add(commandId);
       }
+      return next;
+    });
+  }, []);
 
-      if (success) {
-        const atGoal = currentMap.cells.some((cell) => cell.type === "goal" && cell.x === currentRobot.x && cell.y === currentRobot.y);
-        const allStarsCollected = collectedStarsCount >= currentMap.stars.length;
+  const handleAutoSolve = useCallback(async () => {
+    if (isRunning || isDebugging) return;
+    if (!settings.enableAutoSolve) {
+      message.warning('AI 自动解题功能已禁用，请在设置中开启');
+      return;
+    }
+    if (isDailyLimitReached()) {
+      message.warning('今日 Token 使用已达上限，请明天再试');
+      return;
+    }
 
-        if (atGoal && allStarsCollected) {
-          message = "恭喜你过关了！";
-          handleLevelComplete(collectedStarsCount, commands.length);
-        } else if (!atGoal) {
-          success = false;
-          message = "机器人没有到达终点！";
-        } else if (collectedStarsCount < currentMap.stars.length) {
-          success = false;
-          message = "还有星星没有收集！";
+    const robotCell = currentMap.cells.find((cell) => cell.type === 'robot');
+    const goalCell = currentMap.cells.find((cell) => cell.type === 'goal');
+    if (!robotCell || !goalCell) {
+      message.error('无法找到机器人或目标位置');
+      return;
+    }
+
+    setShowSolveModal(true);
+    try {
+      const result = await solve({
+        map: currentMap,
+        startX: robotCell.x,
+        startY: robotCell.y,
+        startDir: robotCell.dir || 'right',
+        goalX: goalCell.x,
+        goalY: goalCell.y,
+      });
+
+      if (result) {
+        commitCommands(solverResultToCommands(result));
+        resetPreview();
+        message.success('AI 解题成功！');
+        if (result.explanation) {
+          message.info(result.explanation);
         }
+      } else {
+        message.error('AI 解题失败，请重试');
       }
-
-      setIsRunning(false);
-      if (message) {
-        setNotification({ message, type: success ? "success" : "error" });
-      }
-    };
-
-    runProgram();
-  }, [currentMap, commands, setRobot, setCollectedStars, setIsRunning, handleLevelComplete]);
+    } catch {
+      message.error('AI 解题失败，请重试');
+    } finally {
+      setShowSolveModal(false);
+    }
+  }, [
+    settings.enableAutoSolve,
+    isDailyLimitReached,
+    currentMap,
+    solve,
+    commitCommands,
+    resetPreview,
+    isRunning,
+    isDebugging,
+  ]);
 
   return (
     <div className={styles.gameContainer}>
@@ -905,7 +694,7 @@ const Game: React.FC = () => {
             <div className={styles.programEditor}>
               <div className={styles.editorHeader}>
                 <div className={styles.levelInfo}>
-                  <span className={styles.levelName}>{currentLevelIndex < levels.length ? currentLevelData.name : "自定义关卡"}</span>
+                  <span className={styles.levelName}>{currentLevelData.name}</span>
                   <span className={styles.levelBadge}>
                     🌟 {currentLevelIndex + 1}/{allLevelsCount}
                   </span>
@@ -918,7 +707,11 @@ const Game: React.FC = () => {
                   >
                     上一关
                   </Button>
-                  <Button icon={<RightOutlined />} onClick={nextLevel} disabled={currentLevelIndex >= allLevelsCount - 1}>
+                  <Button
+                    icon={<RightOutlined />}
+                    onClick={nextLevel}
+                    disabled={currentLevelIndex >= allLevelsCount - 1}
+                  >
                     下一关
                   </Button>
                   <div className={styles.spacer}></div>
@@ -950,8 +743,10 @@ const Game: React.FC = () => {
                   icon={<PlayCircleOutlined />}
                   onClick={() => {
                     playClickSound();
-                    handleRunProgram();
+                    void handleRunProgram();
                   }}
+                  disabled={isRunning || isDebugging || commands.length === 0}
+                  loading={isRunning}
                 >
                   运行
                 </Button>
@@ -962,11 +757,12 @@ const Game: React.FC = () => {
                     playClickSound();
                     clearCommands();
                   }}
+                  disabled={isRunning}
                 >
                   清空
                 </Button>
                 <Button
-                  type={isDebugMode ? "primary" : "default"}
+                  type={isDebugMode ? 'primary' : 'default'}
                   icon={<BugOutlined />}
                   onClick={() => {
                     playClickSound();
@@ -975,10 +771,27 @@ const Game: React.FC = () => {
                 >
                   调试模式
                 </Button>
-                <Button icon={<UndoOutlined />} onClick={handleUndo} disabled={historyIndex <= 0} title="撤销" />
-                <Button icon={<RedoOutlined />} onClick={handleRedo} disabled={historyIndex >= history.length - 1} title="重做" />
+                <Button
+                  icon={<UndoOutlined />}
+                  onClick={handleUndo}
+                  disabled={historyIndex <= 0}
+                  title="撤销"
+                />
+                <Button
+                  icon={<RedoOutlined />}
+                  onClick={handleRedo}
+                  disabled={historyIndex >= history.length - 1}
+                  title="重做"
+                />
                 <div className={styles.spacer}></div>
-                <Button type="primary" icon={<BulbOutlined />} onClick={handleAutoSolve} disabled={isGenerating}>
+                <Button
+                  type="primary"
+                  icon={<BulbOutlined />}
+                  onClick={() => {
+                    void handleAutoSolve();
+                  }}
+                  disabled={isGenerating || isRunning || isDebugging}
+                >
                   AI解题
                 </Button>
               </div>
@@ -995,11 +808,10 @@ const Game: React.FC = () => {
                   onDropBefore={handleDropBefore}
                   onDropAfter={handleDropAfter}
                   isDebugMode={isDebugMode}
-                  currentStep={currentStep}
-                  debugSteps={debugSteps}
                   breakpoints={breakpoints}
                   onToggleBreakpoint={handleToggleBreakpoint}
                   onUpdateCommand={handleUpdateCommand}
+                  currentCommandId={debugCommandId}
                 />
               </div>
 
@@ -1007,16 +819,32 @@ const Game: React.FC = () => {
                 <div className={styles.debugControls}>
                   <h4>🔧 调试控制</h4>
                   <div className={styles.debugButtons}>
-                    <button onClick={handleStartDebug} disabled={isDebugging} className={styles.startButton}>
+                    <button
+                      onClick={handleStartDebug}
+                      disabled={isDebugging}
+                      className={styles.startButton}
+                    >
                       ▶️ 开始调试
                     </button>
-                    <button onClick={handleStepDebug} disabled={!isDebugging} className={styles.stepButton}>
+                    <button
+                      onClick={handleStepDebug}
+                      disabled={!isDebugging}
+                      className={styles.stepButton}
+                    >
                       ⏭️ 单步执行
                     </button>
-                    <button onClick={handleContinueDebug} disabled={!isDebugging} className={styles.continueButton}>
+                    <button
+                      onClick={handleContinueDebug}
+                      disabled={!isDebugging}
+                      className={styles.continueButton}
+                    >
                       ▶️▶️ 继续执行
                     </button>
-                    <button onClick={handleStopDebug} disabled={!isDebugging} className={styles.stopButton}>
+                    <button
+                      onClick={handleStopDebug}
+                      disabled={!isDebugging}
+                      className={styles.stopButton}
+                    >
                       ⏹️ 停止
                     </button>
                   </div>
@@ -1028,7 +856,7 @@ const Game: React.FC = () => {
                       max="2000"
                       step="100"
                       value={debugSpeed}
-                      onChange={(e) => setDebugSpeed(Number(e.target.value))}
+                      onChange={(event) => setDebugSpeed(Number(event.target.value))}
                       className={styles.speedSlider}
                     />
                     <span>{debugSpeed}ms</span>
@@ -1036,7 +864,7 @@ const Game: React.FC = () => {
                 </div>
               )}
 
-              {isDebugMode && <LogPanel logs={executionLog} />}
+              {isDebugMode && <LogPanel logs={debugLogs} />}
             </div>
           </div>
 
@@ -1045,23 +873,23 @@ const Game: React.FC = () => {
             <GameCanvas
               map={currentMap}
               robot={isDebugging ? debugRobot : robot}
-              collectedStars={isDebugging ? [] : collectedStars}
-              isExecuting={isDebugging || isRunning}
+              collectedStars={isDebugging ? debugStars : collectedStars}
             />
             {isDebugMode && (
               <div className={styles.debugInfo}>
                 <h4>调试信息</h4>
                 <div className={styles.debugStats}>
+                  <div>已执行步骤: {debugLogs.length}</div>
                   <div>
-                    当前步骤: {currentStep + 1}/{debugSteps.length}
+                    收集星星: {debugStars.length}/{currentMap.stars.length}
                   </div>
                   <div>
-                    收集星星: {debugCollectedStars}/{currentMap.stars.length}
+                    机器人位置: ({isDebugging ? debugRobot.x : robot.x},{' '}
+                    {isDebugging ? debugRobot.y : robot.y})
                   </div>
                   <div>
-                    机器人位置: ({isDebugging ? debugRobot.x : robot.x}, {isDebugging ? debugRobot.y : robot.y})
+                    机器人方向: {getDirectionLabel(isDebugging ? debugRobot.dir : robot.dir)}
                   </div>
-                  <div>机器人方向: {getDirectionLabel(isDebugging ? debugRobot.dir : robot.dir)}</div>
                 </div>
               </div>
             )}
@@ -1069,27 +897,36 @@ const Game: React.FC = () => {
               <HintSystem
                 hints={generateHints(
                   currentLevelData.id,
-                  currentLevelData.minCommands <= 3 ? "basic" : currentLevelData.minCommands <= 6 ? "loop" : "collect",
+                  currentLevelData.minCommands <= 3
+                    ? 'basic'
+                    : currentLevelData.minCommands <= 6
+                      ? 'loop'
+                      : 'collect',
                 )}
                 levelHint={currentLevelData.hint}
+                onUseHint={() => statsStorage.incrementHintUsage()}
               />
             </div>
           </div>
         </div>
-
-        
       </main>
 
-      <Modal title="AI 正在解题..." open={showSolveModal} footer={null} closable={false} centered>
-        <div style={{ textAlign: "center", padding: "20px" }}>
+      <Modal
+        title="AI 正在解题..."
+        open={showSolveModal}
+        footer={null}
+        closable={false}
+        centered
+      >
+        <div style={{ textAlign: 'center', padding: '20px' }}>
           <Spin size="large" />
-          <p style={{ marginTop: "16px" }}>正在分析关卡并生成最优解，请稍候...</p>
+          <p style={{ marginTop: '16px' }}>正在分析关卡并生成最优解，请稍候...</p>
         </div>
       </Modal>
 
       {showDemoPrompt && (
         <div className={styles.demoPromptOverlay} onClick={() => setShowDemoPrompt(false)}>
-          <div className={styles.demoPrompt} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.demoPrompt} onClick={(event) => event.stopPropagation()}>
             <h4>指令演示</h4>
             <p>此关卡包含一个演示程序，展示了所有指令类型的使用方法。</p>
             <p>是否加载演示程序？</p>
@@ -1102,29 +939,39 @@ const Game: React.FC = () => {
       )}
 
       {showAchievementNotification && (
-        <div className={styles.achievementOverlay} onClick={() => setShowAchievementNotification(null)}>
-          <div className={styles.achievementPopup} onClick={(e) => e.stopPropagation()}>
+        <div
+          className={styles.achievementOverlay}
+          onClick={() => setShowAchievementNotification(null)}
+        >
+          <div
+            className={styles.achievementPopup}
+            onClick={(event) => event.stopPropagation()}
+          >
             <div className={styles.achievementIcon}>{showAchievementNotification.icon}</div>
             <h3 className={styles.achievementTitle}>🎉 成就解锁！</h3>
             <h4 className={styles.achievementName}>{showAchievementNotification.name}</h4>
-            <p className={styles.achievementDescription}>{showAchievementNotification.description}</p>
-            <button className={styles.achievementClose} onClick={() => setShowAchievementNotification(null)}>
+            <p className={styles.achievementDescription}>
+              {showAchievementNotification.description}
+            </p>
+            <button
+              className={styles.achievementClose}
+              onClick={() => setShowAchievementNotification(null)}
+            >
               太棒了！
             </button>
           </div>
         </div>
       )}
 
-      {/* 保存程序对话框 */}
       {showSaveDialog && (
         <div className={styles.demoPromptOverlay} onClick={() => setShowSaveDialog(false)}>
-          <div className={styles.demoPrompt} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.demoPrompt} onClick={(event) => event.stopPropagation()}>
             <h4>💾 保存程序</h4>
             <p>请输入程序名称：</p>
             <input
               type="text"
               value={programName}
-              onChange={(e) => setProgramName(e.target.value)}
+              onChange={(event) => setProgramName(event.target.value)}
               placeholder="例如：我的解决方案"
               className={styles.input}
               maxLength={30}
@@ -1138,10 +985,9 @@ const Game: React.FC = () => {
         </div>
       )}
 
-      {/* 加载程序对话框 */}
       {showLoadDialog && (
         <div className={styles.demoPromptOverlay} onClick={() => setShowLoadDialog(false)}>
-          <div className={styles.demoPrompt} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.demoPrompt} onClick={(event) => event.stopPropagation()}>
             <h4>📂 加载程序</h4>
             <p>选择要加载的程序：</p>
             <div className={styles.programList}>
@@ -1150,10 +996,17 @@ const Game: React.FC = () => {
               ) : (
                 savedPrograms.map((program) => (
                   <div key={program.id} className={styles.programItem}>
-                    <button className={styles.loadButton} onClick={() => handleLoadProgram(program)}>
+                    <button
+                      className={styles.loadButton}
+                      onClick={() => handleLoadProgram(program)}
+                    >
                       {program.name}
                     </button>
-                    <button className={styles.deleteButton} onClick={() => handleDeleteProgram(program.id)} title="删除程序">
+                    <button
+                      className={styles.deleteButton}
+                      onClick={() => handleDeleteProgram(program.id)}
+                      title="删除程序"
+                    >
                       🗑️
                     </button>
                   </div>
@@ -1167,7 +1020,13 @@ const Game: React.FC = () => {
         </div>
       )}
 
-      {notification && <Notification message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
+      {notification && (
+        <Notification
+          message={notification.message}
+          type={notification.type}
+          onClose={() => setNotification(null)}
+        />
+      )}
     </div>
   );
 };

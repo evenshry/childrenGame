@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { playClickSound } from '@/utils/animations';
 import styles from './index.module.scss';
 
@@ -27,18 +27,26 @@ const Guide: React.FC<GuideProps> = ({
   const [currentStep, setCurrentStep] = useState(0);
   const [isVisible, setIsVisible] = useState(true);
   const [showCelebration, setShowCelebration] = useState(false);
+  const celebratedRef = useRef(false);
 
   const step = steps[currentStep];
   const isLastStep = currentStep === steps.length - 1;
 
   useEffect(() => {
-    if (isFirstTime && currentStep === 0) {
-      setTimeout(() => {
-        setShowCelebration(true);
-        setTimeout(() => setShowCelebration(false), 2000);
-      }, 500);
-    }
-  }, [isFirstTime]);
+    if (!isFirstTime || currentStep !== 0 || celebratedRef.current) return;
+    celebratedRef.current = true;
+
+    let hideTimer: number | undefined;
+    const showTimer = window.setTimeout(() => {
+      setShowCelebration(true);
+      hideTimer = window.setTimeout(() => setShowCelebration(false), 2000);
+    }, 500);
+
+    return () => {
+      window.clearTimeout(showTimer);
+      if (hideTimer !== undefined) window.clearTimeout(hideTimer);
+    };
+  }, [isFirstTime, currentStep]);
 
   const handleNext = () => {
     playClickSound();

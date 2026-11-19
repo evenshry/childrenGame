@@ -1,4 +1,4 @@
-import { Command, Level, LevelRating, Achievement } from '@/types/global';
+import { Level, LevelRating, Achievement, SavedProgram } from '@/types/global';
 import { getAllLevels } from '@/utils/constants';
 
 // ==================== 类型定义 ====================
@@ -21,14 +21,7 @@ export interface LevelProgress {
   attempts: number;
 }
 
-export interface SavedProgram {
-  id: string;
-  name: string;
-  commands: Command[];
-  levelId: string;
-  createdAt: number;
-  updatedAt: number;
-}
+export type { SavedProgram };
 
 export interface PlayerStats {
   totalLevelsCompleted: number;
@@ -108,7 +101,7 @@ const DEFAULT_STATS: PlayerStats = {
   lastPlayDate: '',
 };
 
-const DEFAULT_GAME_DATA: GameData = {
+const createDefaultGameData = (): GameData => ({
   version: CURRENT_VERSION,
   user: DEFAULT_USER,
   progress: {
@@ -119,39 +112,51 @@ const DEFAULT_GAME_DATA: GameData = {
   modifiedBuiltinLevels: {},
   savedPrograms: [],
   achievements: [],
-  stats: DEFAULT_STATS,
-  settings: DEFAULT_SETTINGS,
+  stats: { ...DEFAULT_STATS },
+  settings: { ...DEFAULT_SETTINGS },
   lastSavedAt: Date.now(),
-};
+});
 
 // ==================== 核心存储函数 ====================
 
+/** 内存缓存：避免每次读取都 JSON.parse 整个存档 */
+let gameDataCache: GameData | null = null;
+
 const getGameData = (): GameData => {
+  if (gameDataCache) return gameDataCache;
   try {
     const data = localStorage.getItem(STORAGE_KEYS.GAME_DATA);
     if (!data) {
-      return { ...DEFAULT_GAME_DATA };
+      gameDataCache = createDefaultGameData();
+      return gameDataCache;
     }
-    const parsed = JSON.parse(data);
-    return {
-      ...DEFAULT_GAME_DATA,
+    const parsed = JSON.parse(data) as Partial<GameData>;
+    gameDataCache = {
+      ...createDefaultGameData(),
       ...parsed,
+      progress: {
+        currentLevelIndex: parsed.progress?.currentLevelIndex ?? 0,
+        levels: parsed.progress?.levels ?? {},
+      },
       modifiedBuiltinLevels: parsed.modifiedBuiltinLevels || {},
+      customLevels: Array.isArray(parsed.customLevels) ? parsed.customLevels : [],
+      savedPrograms: Array.isArray(parsed.savedPrograms) ? parsed.savedPrograms : [],
+      achievements: Array.isArray(parsed.achievements) ? parsed.achievements : [],
       settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
       stats: { ...DEFAULT_STATS, ...parsed.stats },
     };
+    return gameDataCache;
   } catch (error) {
     console.error('Failed to get game data:', error);
-    return { ...DEFAULT_GAME_DATA };
+    gameDataCache = createDefaultGameData();
+    return gameDataCache;
   }
 };
 
 const saveGameData = (data: GameData): void => {
+  const toSave = { ...data, lastSavedAt: Date.now() };
+  gameDataCache = toSave;
   try {
-    const toSave = {
-      ...data,
-      lastSavedAt: Date.now(),
-    };
     localStorage.setItem(STORAGE_KEYS.GAME_DATA, JSON.stringify(toSave));
   } catch (error) {
     console.error('Failed to save game data:', error);
@@ -159,8 +164,7 @@ const saveGameData = (data: GameData): void => {
 };
 
 const updateGameData = (updates: Partial<GameData>): GameData => {
-  const current = getGameData();
-  const updated = { ...current, ...updates };
+  const updated = { ...getGameData(), ...updates };
   saveGameData(updated);
   return updated;
 };
@@ -246,9 +250,12 @@ export const progressStorage = {
         ? Math.min(commandsUsed, existing.commandsUsed)
         : commandsUsed,
       completedAt: existing?.completedAt || Date.now(),
-      bestTime: existing?.bestTime
-        ? Math.min(timeSpent || Infinity, existing.bestTime)
-        : timeSpent,
+      bestTime:
+        timeSpent === undefined
+          ? existing?.bestTime
+          : existing?.bestTime === undefined
+            ? timeSpent
+            : Math.min(timeSpent, existing.bestTime),
       attempts: (existing?.attempts || 0) + 1,
     };
 
@@ -257,8 +264,9 @@ export const progressStorage = {
 
     if (isFirstComplete) {
       newStats.totalLevelsCompleted += 1;
-      newStats.totalStarsCollected += stars;
     }
+    // 后续补收的星星也要累计
+    newStats.totalStarsCollected += Math.max(0, progress.stars - (existing?.stars || 0));
     newStats.totalCommandsUsed += commandsUsed;
 
     updateGameData({
@@ -306,13 +314,12 @@ export const progressStorage = {
       .map(p => ({
         levelId: p.levelId,
         stars: p.stars,
-        completedAt: p.completedAt!,
+        completedAt: p.completedAt ?? 0,
         minCommands: p.commandsUsed,
       }));
   },
 
   reset: (): void => {
-    const data = getGameData();
     updateGameData({
       progress: { currentLevelIndex: 0, levels: {} }
     });
@@ -389,8 +396,8 @@ export const customLevelStorage = {
     return data.customLevels.length + Object.keys(data.modifiedBuiltinLevels).length;
   },
 
-  getModifiedBuiltinLevel: (id: string): Level | undefined => {
-    return getGameData().modifiedBuiltinLevels[id];
+  getAllModifiedBuiltinLevels: (): Record<string, Level> => {
+    return getGameData().modifiedBuiltinLevels;
   },
 };
 
@@ -602,16 +609,25 @@ export const dataExport = {
 
   import: (jsonString: string): boolean => {
     try {
-      const data = JSON.parse(jsonString);
-      if (data.version && data.progress) {
-        saveGameData({
-          ...DEFAULT_GAME_DATA,
-          ...data,
-          version: CURRENT_VERSION,
-        });
-        return true;
-      }
-      return false;
+      const data = JSON.parse(jsonString) as Partial<GameData>;
+      if (!data.version || !data.progress) return false;
+      const defaults = createDefaultGameData();
+      saveGameData({
+        ...defaults,
+        ...data,
+        version: CURRENT_VERSION,
+        progress: {
+          currentLevelIndex: data.progress.currentLevelIndex ?? 0,
+          levels: data.progress.levels ?? {},
+        },
+        settings: { ...defaults.settings, ...data.settings },
+        stats: { ...defaults.stats, ...data.stats },
+        customLevels: Array.isArray(data.customLevels) ? data.customLevels : [],
+        savedPrograms: Array.isArray(data.savedPrograms) ? data.savedPrograms : [],
+        achievements: Array.isArray(data.achievements) ? data.achievements : [],
+        modifiedBuiltinLevels: data.modifiedBuiltinLevels || {},
+      });
+      return true;
     } catch (error) {
       console.error('Failed to import data:', error);
       return false;
@@ -625,8 +641,10 @@ export const dataExport = {
     const a = document.createElement('a');
     a.href = url;
     a.download = `${filename}_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
   },
 
   upload: (file: File): Promise<boolean> => {
@@ -646,49 +664,51 @@ export const dataExport = {
 // ==================== 数据清理 ====================
 
 export const clearAllData = (): void => {
+  gameDataCache = null;
   localStorage.removeItem(STORAGE_KEYS.GAME_DATA);
 };
 
 export const resetProgress = (): void => {
-  const data = getGameData();
   updateGameData({
     progress: { currentLevelIndex: 0, levels: {} },
-    stats: DEFAULT_STATS,
+    stats: { ...DEFAULT_STATS },
     achievements: [],
   });
 };
 
 // ==================== 兼容旧版本的接口 ====================
 
-export const storage = {
-  getUserProgress: () => {
-    const data = getGameData();
-    return {
-      currentLevel: data.progress.currentLevelIndex + 1,
-      completedLevels: Object.entries(data.progress.levels)
-        .filter(([_, p]) => p.completed)
-        .map(([id, _]) => {
-          const allLevels = getAllLevels();
-          return allLevels.findIndex((l: Level) => l.id === id);
-        })
-        .filter((idx: number) => idx >= 0),
-      totalStars: progressStorage.getTotalStars(),
-      achievements: achievementStorage.getUnlockedIds(),
-      savedPrograms: data.savedPrograms,
-      lastPlayedAt: data.lastSavedAt,
-    };
-  },
+const getUserProgressCompat = () => {
+  const data = getGameData();
+  return {
+    currentLevel: data.progress.currentLevelIndex + 1,
+    completedLevels: Object.entries(data.progress.levels)
+      .filter(([, p]) => p.completed)
+      .map(([id]) => {
+        const allLevels = getAllLevels();
+        return allLevels.findIndex((l: Level) => l.id === id);
+      })
+      .filter((idx: number) => idx >= 0),
+    totalStars: progressStorage.getTotalStars(),
+    achievements: achievementStorage.getUnlockedIds(),
+    savedPrograms: data.savedPrograms,
+    lastPlayedAt: data.lastSavedAt,
+  };
+};
 
-  saveUserProgress: (progress: any) => {
+export const storage = {
+  getUserProgress: getUserProgressCompat,
+
+  saveUserProgress: (progress: { currentLevel?: number }) => {
     if (progress.currentLevel !== undefined) {
       progressStorage.setCurrentLevelIndex(progress.currentLevel - 1);
     }
   },
 
-  updateUserProgress: (updates: any) => {
-    const current = storage.getUserProgress();
-    return { ...current, ...updates };
-  },
+  updateUserProgress: (updates: Partial<ReturnType<typeof getUserProgressCompat>>) => ({
+    ...getUserProgressCompat(),
+    ...updates,
+  }),
 
   getCustomLevels: () => customLevelStorage.getAll(),
   saveCustomLevel: (level: Level) => customLevelStorage.save(level),

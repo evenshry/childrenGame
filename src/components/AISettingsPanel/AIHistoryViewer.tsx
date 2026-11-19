@@ -4,18 +4,19 @@ import { HistoryOutlined, ReloadOutlined, DeleteOutlined, CheckCircleOutlined, C
 import { useAIStore, type AIHistoryEntry } from '@/store/aiStore';
 import { useAILevelGenerator } from '@/hooks/useAILevelGenerator';
 import { useAIAutoSolver } from '@/hooks/useAIAutoSolver';
+import type { LevelGenResult, SolverResult } from '@/api/qianwen/types';
 
-const { Title, Text, Paragraph } = Typography;
+const { Text } = Typography;
 
 interface AIHistoryViewerProps {
   open: boolean;
   onClose: () => void;
-  onUseLevelResult?: (levelData: any) => void;
-  onUseSolverResult?: (solverData: any) => void;
+  onUseLevelResult?: (levelData: LevelGenResult) => void;
+  onUseSolverResult?: (solverData: SolverResult) => void;
 }
 
 const AIHistoryViewer: React.FC<AIHistoryViewerProps> = ({ open, onClose, onUseLevelResult, onUseSolverResult }) => {
-  const { generationHistory, clearHistory, deleteHistoryEntry, getHistoryById } = useAIStore();
+  const { generationHistory, clearHistory, deleteHistoryEntry } = useAIStore();
   const { generate: generateLevel } = useAILevelGenerator();
   const { solve: solveLevel } = useAIAutoSolver();
   const [selectedEntry, setSelectedEntry] = useState<AIHistoryEntry | null>(null);
@@ -53,7 +54,7 @@ const AIHistoryViewer: React.FC<AIHistoryViewerProps> = ({ open, onClose, onUseL
   const renderHistoryDetail = (entry: AIHistoryEntry) => {
     switch (entry.type) {
       case 'level': {
-        const data = entry.data as any;
+        const data = entry.data;
         return (
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
             <Descriptions title="请求参数" column={1} bordered size="small">
@@ -70,11 +71,11 @@ const AIHistoryViewer: React.FC<AIHistoryViewerProps> = ({ open, onClose, onUseL
               </Descriptions>
             )}
 
-            {entry.success && onUseLevelResult && (
+            {entry.success && data.result && onUseLevelResult && (
               <Button 
                 type="primary" 
                 onClick={() => {
-                  onUseLevelResult(data.result);
+                  if (data.result) onUseLevelResult(data.result);
                   onClose();
                 }}
               >
@@ -86,7 +87,7 @@ const AIHistoryViewer: React.FC<AIHistoryViewerProps> = ({ open, onClose, onUseL
       }
 
       case 'solve': {
-        const data = entry.data as any;
+        const data = entry.data;
         return (
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
             <Descriptions title="关卡信息" column={1} bordered size="small">
@@ -112,17 +113,17 @@ const AIHistoryViewer: React.FC<AIHistoryViewerProps> = ({ open, onClose, onUseL
                     flexWrap: 'wrap', 
                     gap: '8px' 
                   }}>
-                    {data.result.commands?.map((cmd: any, idx: number) => (
+                    {data.result.commands?.map((cmd, idx: number) => (
                       <Tag key={idx} color="blue">{cmd.type}</Tag>
                     ))}
                   </div>
                 </div>
 
-                {entry.success && onUseSolverResult && (
+                {entry.success && data.result && onUseSolverResult && (
                   <Button 
                     type="primary" 
                     onClick={() => {
-                      onUseSolverResult(data.result);
+                      if (data.result) onUseSolverResult(data.result);
                       onClose();
                     }}
                   >
@@ -147,7 +148,7 @@ const AIHistoryViewer: React.FC<AIHistoryViewerProps> = ({ open, onClose, onUseL
     
     try {
       if (entry.type === 'level') {
-        const data = entry.data as any;
+        const data = entry.data;
         const result = await generateLevel(data.request);
         if (result && onUseLevelResult) {
           onUseLevelResult(result);
@@ -155,7 +156,7 @@ const AIHistoryViewer: React.FC<AIHistoryViewerProps> = ({ open, onClose, onUseL
           onClose();
         }
       } else if (entry.type === 'solve') {
-        const data = entry.data as any;
+        const data = entry.data;
         const result = await solveLevel(data.request);
         if (result && onUseSolverResult) {
           onUseSolverResult(result);
@@ -227,7 +228,7 @@ const AIHistoryViewer: React.FC<AIHistoryViewerProps> = ({ open, onClose, onUseL
       title: '操作',
       key: 'actions',
       width: 200,
-      render: (_: any, record: AIHistoryEntry) => (
+      render: (_value: unknown, record: AIHistoryEntry) => (
         <Space size="small">
           <Button 
             type="text" 
@@ -333,7 +334,7 @@ const AIHistoryViewer: React.FC<AIHistoryViewerProps> = ({ open, onClose, onUseL
             {renderHistoryDetail(selectedEntry)}
             
             {/* 显示原始API响应数据 */}
-            {(selectedEntry.data as any)?.rawResponse && (
+            {(selectedEntry.data).rawResponse !== undefined && (
               <div style={{ marginTop: '16px' }}>
                 <Text strong>原始API响应数据：</Text>
                 <pre style={{ 
@@ -346,7 +347,7 @@ const AIHistoryViewer: React.FC<AIHistoryViewerProps> = ({ open, onClose, onUseL
                   overflow: 'auto',
                   marginTop: '8px'
                 }}>
-                  {JSON.stringify((selectedEntry.data as any).rawResponse, null, 2)}
+                  {JSON.stringify((selectedEntry.data).rawResponse, null, 2)}
                 </pre>
               </div>
             )}

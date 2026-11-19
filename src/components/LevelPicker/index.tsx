@@ -5,6 +5,8 @@ import { playClickSound } from '@/utils/animations';
 import { customLevelStorage } from '@/utils/storage';
 import styles from './index.module.scss';
 
+const isCustomLevelId = (id: string) => id.startsWith('custom_') || id.startsWith('ai_');
+
 interface LevelPickerProps {
   levels: Level[];
   currentLevelId: string | null;
@@ -44,7 +46,7 @@ const LevelPicker: React.FC<LevelPickerProps> = ({
   }, [loadCustomLevels]);
 
   useEffect(() => {
-    if (currentLevelId && currentLevelId.startsWith('custom_')) {
+    if (currentLevelId && isCustomLevelId(currentLevelId)) {
       loadCustomLevels();
     }
   }, [currentLevelId, loadCustomLevels]);
@@ -106,7 +108,7 @@ const LevelPicker: React.FC<LevelPickerProps> = ({
   };
 
   const getLevelIcon = (level: Level) => {
-    if (level.id.startsWith('custom_')) {
+    if (isCustomLevelId(level.id)) {
       return '🎨';
     }
     const builtinLevelsCount = levels.length;
@@ -146,10 +148,10 @@ const LevelPicker: React.FC<LevelPickerProps> = ({
             </div>
           )}
           
-          {allLevels.map((level, index) => {
+          {allLevels.map((level, _index) => {
             const isFirstBuiltin = levels.length > 0 && level.id === levels[0].id;
             const isLastBuiltin = levels.length > 0 && level.id === levels[levels.length - 1].id;
-            const isCustom = level.id.startsWith('custom_');
+            const isCustom = isCustomLevelId(level.id);
             return (
               <div
                 key={level.id}

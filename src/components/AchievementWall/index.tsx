@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Achievement } from '@/types/global';
 import {
   achievementDefinitions,
@@ -112,6 +112,15 @@ const AchievementWall: React.FC<AchievementWallProps> = ({
               onMouseEnter={() => setHoveredAchievement(def.id)}
               onMouseLeave={() => setHoveredAchievement(null)}
               onClick={() => handleAchievementClick(def.id, isUnlocked)}
+              role="button"
+              tabIndex={0}
+              aria-label={`${isUnlocked ? def.name : '未解锁成就'}`}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  handleAchievementClick(def.id, isUnlocked);
+                }
+              }}
             >
               <div className={styles.cardHeader}>
                 <span className={styles.categoryBadge} style={{ backgroundColor: categoryInfo.color }}>

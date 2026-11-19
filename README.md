@@ -33,18 +33,19 @@
 
 ### 环境要求
 - Node.js >= 18
-- npm 或 yarn
+- Yarn 4（通过 Corepack 启用）
 
 ### 安装依赖
 
 ```bash
-npm install
+corepack enable
+yarn install
 ```
 
 ### 启动开发服务器
 
 ```bash
-npm run dev
+yarn dev
 ```
 
 应用将在 http://localhost:5173 打开
@@ -52,7 +53,7 @@ npm run dev
 ### 构建生产版本
 
 ```bash
-npm run build
+yarn build
 ```
 
 构建产物将输出到 `dist` 目录
@@ -60,7 +61,7 @@ npm run build
 ### 代码规范检查
 
 ```bash
-npm run lint
+yarn lint
 ```
 
 ## ⚙️ 环境变量配置

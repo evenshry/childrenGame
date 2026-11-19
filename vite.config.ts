@@ -34,13 +34,19 @@ export default defineConfig(({ mode }) => {
             if (id.includes("react") || id.includes("react-dom") || id.includes("react-router-dom")) {
               return "react-vendor";
             }
-            if (id.includes("antd")) {
-              return "antd-vendor";
+            if (id.includes("@ant-design/icons")) {
+              return "antd-icons";
+            }
+            if (id.includes("/antd/")) {
+              return "antd-core";
+            }
+            if (id.includes("/rc-") || id.includes("/@rc-component/")) {
+              return "antd-rc";
             }
           },
         },
       },
-      chunkSizeWarningLimit: 600,
+      chunkSizeWarningLimit: 1200,
     },
   };
 });
