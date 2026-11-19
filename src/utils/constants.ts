@@ -206,3 +206,7 @@ export const levels: Level[] = [
     ],
   },
 ];
+
+/** 自定义 / AI 生成关卡（非内置关卡） */
+export const isCustomLevelId = (id: string): boolean =>
+  id.startsWith('custom_') || id.startsWith('ai_');

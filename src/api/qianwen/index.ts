@@ -76,14 +76,21 @@ export const registerApiRuntime = (rt: ApiRuntime) => {
   runtime = rt;
 };
 
+let clientCache: { key: string; baseUrl: string; client: ReturnType<typeof axios.create> } | null = null;
+
 const getClient = () => {
   const key = runtime?.getApiKey() || '';
   const baseUrl = runtime?.getApiBaseUrl() || '';
-  return axios.create({
+  if (clientCache && clientCache.key === key && clientCache.baseUrl === baseUrl) {
+    return clientCache.client;
+  }
+  const client = axios.create({
     baseURL: baseUrl,
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     timeout: 30000,
   });
+  clientCache = { key, baseUrl, client };
+  return client;
 };
 
 /** 生成关卡（强制使用 qwen-turbo 或当前模型，保留简单重试） */
@@ -135,17 +142,20 @@ export const solveLevel = async (
   while (attempts < maxRetries) {
     const modelId = runtime?.getCurrentModelId?.() ?? 'qwen-turbo';
     try {
-      const response = await withRetry(async () =>
-        client.post('', {
-          model: modelId,
-          input: {
-            messages: [
-              { role: 'system', content: solverSystemPrompt.trim() },
-              { role: 'user', content: solverUserPrompt(request).trim() },
-            ],
-          },
-          parameters: { max_tokens: 1024, temperature: 0.3 },
-        })
+      const response = await withRetry(
+        async () =>
+          client.post('', {
+            model: modelId,
+            input: {
+              messages: [
+                { role: 'system', content: solverSystemPrompt.trim() },
+                { role: 'user', content: solverUserPrompt(request).trim() },
+              ],
+            },
+            parameters: { max_tokens: 1024, temperature: 0.3 },
+          }),
+        // 外层 solveLevel 已有模型切换/重试循环，内层不再叠加重试
+        1,
       );
 
       runtime?.onUsageUpdate?.(

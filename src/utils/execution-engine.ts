@@ -19,6 +19,8 @@ export interface ExecutionStep {
   control: boolean;
   /** 已执行的原子动作数 */
   steps: number;
+  /** 等待类指令建议的停留时长（毫秒，最多 5s） */
+  waitMs?: number;
 }
 
 export interface ExecutionResult {
@@ -178,12 +180,17 @@ export function* runProgram(
         yield snapshot(command.id, hasStar ? '收集星星！' : '没有星星可以收集！');
         return true;
       }
-      case 'wait':
+      case 'wait': {
+        const seconds = Math.max(0, Math.min(command.params?.seconds ?? 1, 5));
         steps++;
-        yield snapshot(command.id, `等待 ${command.params?.seconds ?? 1} 秒`);
+        const step = snapshot(command.id, `等待 ${seconds} 秒`);
+        step.waitMs = seconds * 1000;
+        yield step;
         return true;
+      }
       case 'loop': {
         const times = Math.max(0, Math.min(command.params?.times ?? 2, maxLoop));
+        if (times === 0) return true;
         yield snapshot(command.id, `开始循环 ${times} 次`, true, false, true);
         for (let i = 0; i < times; i++) {
           const ok = yield* execMany(command.children ?? []);

@@ -6,7 +6,7 @@ import LevelPicker from '@/components/LevelPicker';
 import AIGenButton from './AIGenButton';
 import { playClickSound } from '@/utils/animations';
 import { customLevelStorage } from '@/utils/storage';
-import { generateId, getLevelById } from '@/utils/constants';
+import { generateId, getLevelById, isCustomLevelId } from '@/utils/constants';
 import styles from './index.module.scss';
  
 export interface LevelEditorProps {
@@ -18,8 +18,6 @@ export interface LevelEditorProps {
   currentLevelId?: string;
 }
  
-const isCustomLevelId = (id: string) => id.startsWith('custom_') || id.startsWith('ai_');
-
 const createEmptyMap = (width: number = 6, height: number = 6): MapData => ({
   width,
   height,

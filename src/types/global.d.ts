@@ -57,12 +57,6 @@ export interface Level {
   demoProgram?: Command[];
 }
 
-// 调试步骤接口
-export interface DebugStep {
-  command: Command;
-  index: number;
-}
-
 // 机器人状态接口
 export interface RobotState {
   x: number;

@@ -47,7 +47,7 @@ export const sanitizeLevelResult = (
 });
 
 export const useAILevelGenerator = () => {
-  const { setIsGenerating, setLastGeneratedLevel, addHistoryEntry, settings, isDailyLimitReached } =
+  const { setIsGenerating, addHistoryEntry, settings, isDailyLimitReached } =
     useAIStore();
   const [error, setError] = useState<string | null>(null);
 
@@ -93,7 +93,6 @@ export const useAILevelGenerator = () => {
       }
 
       const sanitized = sanitizeLevelResult(parsed, request);
-      setLastGeneratedLevel(sanitized);
 
       addHistoryEntry({
         id: entryId,

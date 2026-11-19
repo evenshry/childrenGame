@@ -54,8 +54,7 @@ export const evaluateCondition = (
   condition: ConditionType | undefined,
   robot: RobotState,
   map: MapData,
-  collectedStarsCount: number,
-  _collectedStarsPositions?: { x: number; y: number }[]
+  collectedStarsCount: number
 ): boolean => {
   if (!condition) return true;
 
@@ -90,18 +89,6 @@ export const evaluateCondition = (
     default:
       return true;
   }
-};
-
-/** 判断星星是否在 (x,y) 上（未被收集） */
-export const starAt = (
-  x: number,
-  y: number,
-  map: MapData,
-  collectedStarsPositions?: { x: number; y: number }[]
-): boolean => {
-  if (!map.stars.some((s) => s.x === x && s.y === y)) return false;
-  if (!collectedStarsPositions) return true;
-  return !collectedStarsPositions.some((s) => s.x === x && s.y === y);
 };
 
 /** 机器人是否到达终点 */

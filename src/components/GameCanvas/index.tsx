@@ -373,7 +373,12 @@ const GameCanvas: React.FC<GameCanvasProps> = React.memo(
 
     return (
       <div className={styles.gameCanvasContainer}>
-        <canvas ref={canvasRef} className={styles.gameCanvas} aria-label="游戏地图" />
+        <canvas
+          ref={canvasRef}
+          className={styles.gameCanvas}
+          role="img"
+          aria-label="游戏地图"
+        />
       </div>
     );
   },

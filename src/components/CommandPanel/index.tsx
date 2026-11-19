@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import CommandBlock from '@/components/CommandBlock';
-import AutoSolveButton from './AutoSolveButton';
 import { Command } from '@/types/global';
 import styles from './index.module.scss';
 
@@ -23,7 +22,6 @@ const CommandPanel: React.FC = () => {
     <div className={styles.commandPanel}>
       <div className={styles.panelHeader}>
         <h3>指令面板</h3>
-        <AutoSolveButton />
       </div>
       <div className={styles.commandBlocks}>
         {commands.map((command) => (

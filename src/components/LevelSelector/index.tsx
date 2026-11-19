@@ -1,6 +1,7 @@
 import React from "react";
 import styles from "./index.module.scss";
 import { Level, LevelRating } from "@/types/global";
+import { isCustomLevelId } from "@/utils/constants";
 
 interface LevelSelectorProps {
   levels: Level[];
@@ -11,12 +12,16 @@ interface LevelSelectorProps {
 }
 
 const LevelSelector: React.FC<LevelSelectorProps> = ({ levels, currentLevelId, completedLevels, levelRatings, onSelectLevel }) => {
-  const isLevelUnlocked = (levelIndex: number): boolean => {
-    if (levelIndex === 0) {
+  const isLevelUnlocked = (level: Level): boolean => {
+    // 自定义 / AI 关卡始终可玩
+    if (isCustomLevelId(level.id)) {
       return true;
     }
-    const prevLevel = levels[levelIndex - 1];
-    return completedLevels.includes(prevLevel.id);
+    const index = levels.findIndex((item) => item.id === level.id);
+    if (index <= 0) {
+      return true;
+    }
+    return completedLevels.includes(levels[index - 1].id);
   };
 
   return (
@@ -27,7 +32,7 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({ levels, currentLevelId, c
           const isCompleted = completedLevels.includes(level.id);
           const rating = levelRatings.find((r) => r.levelId === level.id);
           const stars = rating ? rating.stars : 0;
-          const isLocked = !isLevelUnlocked(index);
+          const isLocked = !isLevelUnlocked(level);
 
           return (
             <div

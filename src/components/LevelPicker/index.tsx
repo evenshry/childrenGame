@@ -3,9 +3,8 @@ import { message } from 'antd';
 import { Level } from '@/types/global';
 import { playClickSound } from '@/utils/animations';
 import { customLevelStorage } from '@/utils/storage';
+import { isCustomLevelId } from '@/utils/constants';
 import styles from './index.module.scss';
-
-const isCustomLevelId = (id: string) => id.startsWith('custom_') || id.startsWith('ai_');
 
 interface LevelPickerProps {
   levels: Level[];
@@ -111,10 +110,10 @@ const LevelPicker: React.FC<LevelPickerProps> = ({
     if (isCustomLevelId(level.id)) {
       return '🎨';
     }
-    const builtinLevelsCount = levels.length;
-    const levelIndexInAll = allLevels.findIndex(l => l.id === level.id);
-    if (levelIndexInAll === 0) return '🏁';
-    if (levelIndexInAll === builtinLevelsCount - 1) return '👑';
+    const builtinLevels = levels.filter((item) => !isCustomLevelId(item.id));
+    const index = builtinLevels.findIndex((item) => item.id === level.id);
+    if (index === 0) return '🏁';
+    if (index === builtinLevels.length - 1) return '👑';
     return '📋';
   };
 

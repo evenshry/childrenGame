@@ -42,7 +42,6 @@ export type AIHistoryEntry =
 interface AIState {
   isGenerating: boolean;
   showSettings: boolean;
-  lastGeneratedLevel: LevelGenResult | null;
   usage: {
     totalTokens: number;
     todayTokens: number;
@@ -54,7 +53,6 @@ interface AIState {
 interface AIActions {
   setIsGenerating: (isGenerating: boolean) => void;
   setShowSettings: (show: boolean) => void;
-  setLastGeneratedLevel: (level: LevelGenResult | null) => void;
   updateUsage: (input: number, output: number) => void;
   resetDailyUsage: () => void;
   updateSettings: (settings: Partial<AISettings>) => void;
@@ -62,7 +60,6 @@ interface AIActions {
   deleteHistoryEntry: (id: string) => void;
   clearHistory: () => void;
   isDailyLimitReached: () => boolean;
-  getHistoryById: (id: string) => AIHistoryEntry | undefined;
 }
 
 const SETTINGS_KEY = 'ai_settings';
@@ -119,14 +116,12 @@ export const useAIStore = create<AIState & AIActions>()(
     (set, get) => ({
       isGenerating: false,
       showSettings: false,
-      lastGeneratedLevel: null,
       usage: loadUsage(),
       settings: loadSettings(),
       generationHistory: loadHistory(),
 
       setIsGenerating: (isGenerating) => set({ isGenerating }),
       setShowSettings: (show) => set({ showSettings: show }),
-      setLastGeneratedLevel: (level) => set({ lastGeneratedLevel: level }),
 
       updateUsage: (input, output) => {
         const { usage } = get();
@@ -177,8 +172,6 @@ export const useAIStore = create<AIState & AIActions>()(
         const { usage, settings } = get();
         return usage.todayTokens >= settings.dailyTokenLimit;
       },
-
-      getHistoryById: (id) => get().generationHistory.find((entry) => entry.id === id),
     }),
   ),
 );

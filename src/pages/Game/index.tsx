@@ -50,22 +50,9 @@ import {
   type CommandLocation,
   type DraggedCommand,
 } from '@/utils/commandTree';
-import type {
-  Command,
-  CommandType,
-  RobotState,
-  Achievement,
-  SavedProgram,
-} from '@/types/global';
-import type { SolverResult } from '@/api/qianwen/types';
+import type { SolverCommand, SolverResult } from '@/api/qianwen/types';
+import type { Command, CommandType, MapData, RobotState, Achievement, SavedProgram } from '@/types/global';
 import styles from './index.module.scss';
-
-interface SolverCommand {
-  type: string;
-  params?: Command['params'];
-  children?: SolverCommand[];
-  elseChildren?: SolverCommand[];
-}
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
@@ -78,7 +65,7 @@ const starsToPositions = (keys: string[]): { x: number; y: number }[] =>
     return { x, y };
   });
 
-const getStartRobot = (map: { cells: { type: string; x: number; y: number; dir?: RobotState['dir'] }[] }): RobotState => {
+const getStartRobot = (map: MapData): RobotState => {
   const robotCell = map.cells.find((cell) => cell.type === 'robot');
   return robotCell
     ? { x: robotCell.x, y: robotCell.y, dir: robotCell.dir || 'right' }
@@ -88,13 +75,15 @@ const getStartRobot = (map: { cells: { type: string; x: number; y: number; dir?:
 const toFullCommand = (command: SolverCommand): Command => ({
   id: generateId(),
   type: command.type as CommandType,
-  params: command.params ? { ...command.params } : undefined,
+  params: command.params as unknown as Command['params'],
   children: command.children?.map(toFullCommand),
   elseChildren: command.elseChildren?.map(toFullCommand),
 });
 
 const solverResultToCommands = (result: SolverResult): Command[] =>
-  result.commands.map((command) => toFullCommand(command as SolverCommand));
+  result.commands.map(toFullCommand);
+
+const demoPromptKey = (levelId: string): string => `demo_prompt_dismissed_${levelId}`;
 
 const Game: React.FC = () => {
   const {
@@ -130,8 +119,8 @@ const Game: React.FC = () => {
   } | null>(null);
   const [showDemoPrompt, setShowDemoPrompt] = useState(false);
   const [allLevelsCount, setAllLevelsCount] = useState(() => getAllLevels().length);
-  const [showAchievementNotification, setShowAchievementNotification] =
-    useState<Achievement | null>(null);
+  const [achievementQueue, setAchievementQueue] = useState<Achievement[]>([]);
+  const currentAchievement = achievementQueue.length > 0 ? achievementQueue[0] : null;
   const [showSolveModal, setShowSolveModal] = useState(false);
 
   // 调试状态
@@ -196,7 +185,10 @@ const Game: React.FC = () => {
     breakpointsRef.current = new Set();
     setIsRunning(false);
     levelStartRef.current = Date.now();
-    setShowDemoPrompt(!!currentLevelData.demoProgram);
+    setShowDemoPrompt(
+      !!currentLevelData.demoProgram &&
+        !localStorage.getItem(demoPromptKey(currentLevelData.id)),
+    );
     setAllLevelsCount(getAllLevels().length);
   }, [currentLevelData.id, currentLevelData.demoProgram, setIsRunning]);
 
@@ -237,7 +229,9 @@ const Game: React.FC = () => {
       setBreakpoints([]);
       breakpointsRef.current = new Set();
       setShowDemoPrompt(
-        !!level.demoProgram && useGameStore.getState().commands.length === 0,
+        !!level.demoProgram &&
+          useGameStore.getState().commands.length === 0 &&
+          !localStorage.getItem(demoPromptKey(level.id)),
       );
     }
     initializedLevelRef.current = true;
@@ -448,14 +442,18 @@ const Game: React.FC = () => {
 
       const updatedStats = statsStorage.get();
       const unlockedIds = achievementStorage.getUnlockedIds();
+      const nextQueue = [...achievementQueue];
       checkAchievements(updatedStats).forEach((achievement) => {
         if (!unlockedIds.includes(achievement.id)) {
           achievementStorage.unlock(achievement);
-          setShowAchievementNotification(achievement);
+          nextQueue.push(achievement);
         }
       });
+      if (nextQueue.length > achievementQueue.length) {
+        setAchievementQueue(nextQueue);
+      }
     },
-    [currentLevelData],
+    [currentLevelData, achievementQueue],
   );
 
   const handleRunProgram = useCallback(async () => {
@@ -481,7 +479,7 @@ const Game: React.FC = () => {
         const step = next.value;
         setRobot(step.robot);
         setCollectedStars(starsToPositions(step.collectedStars));
-        await sleep(step.control ? 120 : 240);
+        await sleep(step.waitMs ?? (step.control ? 120 : 240));
         if (runTokenRef.current !== token) return;
       }
     } finally {
@@ -681,6 +679,11 @@ const Game: React.FC = () => {
     isRunning,
     isDebugging,
   ]);
+
+  const dismissDemoPrompt = useCallback(() => {
+    localStorage.setItem(demoPromptKey(currentLevelData.id), '1');
+    setShowDemoPrompt(false);
+  }, [currentLevelData.id]);
 
   return (
     <div className={styles.gameContainer}>
@@ -925,37 +928,37 @@ const Game: React.FC = () => {
       </Modal>
 
       {showDemoPrompt && (
-        <div className={styles.demoPromptOverlay} onClick={() => setShowDemoPrompt(false)}>
+        <div className={styles.demoPromptOverlay} onClick={dismissDemoPrompt}>
           <div className={styles.demoPrompt} onClick={(event) => event.stopPropagation()}>
             <h4>指令演示</h4>
             <p>此关卡包含一个演示程序，展示了所有指令类型的使用方法。</p>
             <p>是否加载演示程序？</p>
             <div className={styles.demoPromptActions}>
-              <button onClick={() => setShowDemoPrompt(false)}>关闭</button>
+              <button onClick={dismissDemoPrompt}>关闭</button>
               <button onClick={loadDemoProgram}>加载演示</button>
             </div>
           </div>
         </div>
       )}
 
-      {showAchievementNotification && (
+      {currentAchievement && (
         <div
           className={styles.achievementOverlay}
-          onClick={() => setShowAchievementNotification(null)}
+          onClick={() => setAchievementQueue((queue) => queue.slice(1))}
         >
           <div
             className={styles.achievementPopup}
             onClick={(event) => event.stopPropagation()}
           >
-            <div className={styles.achievementIcon}>{showAchievementNotification.icon}</div>
+            <div className={styles.achievementIcon}>{currentAchievement.icon}</div>
             <h3 className={styles.achievementTitle}>🎉 成就解锁！</h3>
-            <h4 className={styles.achievementName}>{showAchievementNotification.name}</h4>
+            <h4 className={styles.achievementName}>{currentAchievement.name}</h4>
             <p className={styles.achievementDescription}>
-              {showAchievementNotification.description}
+              {currentAchievement.description}
             </p>
             <button
               className={styles.achievementClose}
-              onClick={() => setShowAchievementNotification(null)}
+              onClick={() => setAchievementQueue((queue) => queue.slice(1))}
             >
               太棒了！
             </button>

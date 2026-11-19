@@ -15,19 +15,14 @@ const AIHelp: React.FC<AIHelpProps> = ({ onClose }) => {
       description: '一键生成适合不同难度的编程关卡，包含地图、星星和障碍物'
     },
     {
-      title: '💬 故事对话',
-      description: '游戏过程中机器人会与你互动，给予鼓励和小提示'
-    },
-    {
       title: '💡 AI解题',
-      description: '遇到困难时，可以让AI帮你分析关卡并给出最优解法'
+      description: '遇到困难时，可以让AI帮你分析关卡并给出最优解法（失败时自动使用本地寻路算法）'
     }
   ];
 
   const tips = [
     '合理使用每日Token限制，避免过度依赖AI',
     '先自己尝试解题，实在困难再使用AI解题功能',
-    '可以在设置中调整故事对话的频率',
     '历史记录可以查看AI功能的使用情况'
   ];
 
