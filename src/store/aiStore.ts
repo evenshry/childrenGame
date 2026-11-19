@@ -178,12 +178,9 @@ export const useAIStore = create<AIState & AIActions>()(
 
 export type { AISettings, LevelHistoryData, SolverHistoryData };
 
+// 密钥仅来自用户设置（localStorage），不读取构建期 env，避免被打进前端产物
 export const getApiKey = (): string => {
-  const { settings } = useAIStore.getState();
-  if (settings.apiKey) {
-    return settings.apiKey;
-  }
-  return import.meta.env.VITE_QIANWEN_API_KEY || '';
+  return useAIStore.getState().settings.apiKey;
 };
 
 export const getApiBaseUrl = (): string => {

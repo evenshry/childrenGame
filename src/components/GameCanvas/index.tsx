@@ -22,8 +22,8 @@ const drawRobot = (
   cellSize: number,
   time: number,
 ) => {
-  const centerX = PADDING + x + cellSize / 2;
-  const centerY = PADDING + y + cellSize / 2;
+  const centerX = PADDING + x * cellSize + cellSize / 2;
+  const centerY = PADDING + y * cellSize + cellSize / 2;
   const bodyRadius = cellSize / 2.5;
   const bounceOffset = Math.sin(time * 0.005) * 3;
 
@@ -133,25 +133,31 @@ const drawRobot = (
   ctx.fill();
 };
 
-const drawStar = (
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  cellSize: number,
-  time: number,
-) => {
-  const centerX = PADDING + x + cellSize / 2;
-  const centerY = PADDING + y + cellSize / 2;
+// 星星精灵预渲染：阴影只算一次，逐帧仅 drawImage + 缩放
+const starSpriteCache = new Map<string, HTMLCanvasElement>();
+
+const getStarSprite = (cellSize: number, dpr: number): HTMLCanvasElement => {
+  const key = `${cellSize}_${dpr}`;
+  const cached = starSpriteCache.get(key);
+  if (cached) return cached;
+
   const radius = cellSize / 3;
-  const scale = 0.9 + ((Math.sin(time * 0.008) + 1) / 2) * 0.2;
+  const pad = 12;
+  const sizeCss = radius * 2 + pad * 2;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(sizeCss * dpr);
+  canvas.height = Math.ceil(sizeCss * dpr);
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return canvas;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.translate(sizeCss / 2, sizeCss / 2);
+
   const gradient = ctx.createRadialGradient(0, 0, 0, 0, 0, radius);
   gradient.addColorStop(0, '#ffeb3b');
   gradient.addColorStop(1, '#ffc107');
-
-  ctx.save();
-  ctx.translate(centerX, centerY);
-  ctx.scale(scale, scale);
   ctx.fillStyle = gradient;
+  ctx.shadowColor = '#ffeb3b';
+  ctx.shadowBlur = 10;
   ctx.beginPath();
   for (let i = 0; i < 5; i++) {
     const angle = (i * 4 * Math.PI) / 5 - Math.PI / 2;
@@ -169,10 +175,29 @@ const drawStar = (
   }
   ctx.closePath();
   ctx.fill();
-  ctx.shadowColor = '#ffeb3b';
-  ctx.shadowBlur = 10;
-  ctx.fill();
-  ctx.shadowBlur = 0;
+
+  starSpriteCache.set(key, canvas);
+  return canvas;
+};
+
+const drawStar = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  cellSize: number,
+  time: number,
+  dpr: number,
+) => {
+  const centerX = PADDING + x * cellSize + cellSize / 2;
+  const centerY = PADDING + y * cellSize + cellSize / 2;
+  const scale = 0.9 + ((Math.sin(time * 0.008) + 1) / 2) * 0.2;
+  const sprite = getStarSprite(cellSize, dpr);
+  const size = sprite.width / dpr;
+
+  ctx.save();
+  ctx.translate(centerX, centerY);
+  ctx.scale(scale, scale);
+  ctx.drawImage(sprite, -size / 2, -size / 2, size, size);
   ctx.restore();
 };
 
@@ -347,7 +372,7 @@ const GameCanvas: React.FC<GameCanvasProps> = React.memo(
             (item) => item.x === star.x && item.y === star.y,
           );
           if (!isCollected) {
-            drawStar(ctx, star.x, star.y, cellSize, time);
+            drawStar(ctx, star.x, star.y, cellSize, time, dpr);
           }
         });
 

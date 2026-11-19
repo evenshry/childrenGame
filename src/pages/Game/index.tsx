@@ -46,12 +46,13 @@ import {
   duplicateCommandInTree,
   moveCommandByOffset,
   moveOrInsertCommand,
+  containsCommandType,
   type CommandBranch,
   type CommandLocation,
   type DraggedCommand,
 } from '@/utils/commandTree';
 import type { SolverCommand, SolverResult } from '@/api/qianwen/types';
-import type { Command, CommandType, MapData, RobotState, Achievement, SavedProgram } from '@/types/global';
+import type { Command, CommandType, Level, MapData, RobotState, Achievement, SavedProgram } from '@/types/global';
 import styles from './index.module.scss';
 
 const sleep = (ms: number) =>
@@ -84,6 +85,21 @@ const solverResultToCommands = (result: SolverResult): Command[] =>
   result.commands.map(toFullCommand);
 
 const demoPromptKey = (levelId: string): string => `demo_prompt_dismissed_${levelId}`;
+
+const getHintDifficulty = (level: Level): 'basic' | 'loop' | 'collect' => {
+  switch (level.id) {
+    case 'level_01':
+      return 'basic';
+    case 'level_02':
+      return 'collect';
+    case 'level_03':
+      return 'loop';
+    case 'level_04':
+      return 'collect';
+    default:
+      return level.minCommands <= 3 ? 'basic' : level.minCommands <= 6 ? 'loop' : 'collect';
+  }
+};
 
 const Game: React.FC = () => {
   const {
@@ -342,6 +358,12 @@ const Game: React.FC = () => {
       const nextCommands = [...commands, newCommand];
       addCommand(newCommand);
 
+      // 含随机转向时预览无法代表实跑结果，回到初始态避免误导
+      if (containsCommandType(nextCommands, 'randomTurn')) {
+        resetPreview();
+        return;
+      }
+
       const startRobot = getStartRobot(currentMap);
       const preview = simulateProgram(nextCommands, startRobot, currentMap);
       setRobot(preview.robot);
@@ -351,7 +373,7 @@ const Game: React.FC = () => {
         setNotification({ message: preview.message, type: 'error' });
       }
     },
-    [commands, currentMap, addCommand, setRobot, setCollectedStars],
+    [commands, currentMap, addCommand, setRobot, setCollectedStars, resetPreview],
   );
 
   const handleRemoveCommand = useCallback(
@@ -483,10 +505,11 @@ const Game: React.FC = () => {
         if (runTokenRef.current !== token) return;
       }
     } finally {
+      // 只有当前 run 才清理标志，避免过期 run 清掉新 run 的重入保护
       if (runTokenRef.current === token) {
         setIsRunning(false);
+        runningRef.current = false;
       }
-      runningRef.current = false;
     }
 
     if (!result || runTokenRef.current !== token) return;
@@ -551,6 +574,7 @@ const Game: React.FC = () => {
 
   const handleStartDebug = useCallback(() => {
     if (isRunning) return;
+    progressStorage.incrementAttempts(currentLevelData.id);
     runTokenRef.current++;
     continueDebugRef.current = false;
     if (runTimerRef.current !== null) {
@@ -569,7 +593,7 @@ const Game: React.FC = () => {
     debugGeneratorRef.current = runProgram(commands, startRobot, currentMap, [], {
       breakpoints: breakpointsRef.current,
     });
-  }, [isRunning, currentMap, resetPreview, commands, breakpoints]);
+  }, [isRunning, currentMap, resetPreview, commands, breakpoints, currentLevelData.id]);
 
   const handleStepDebug = useCallback(() => {
     if (!isDebugging) return;
@@ -898,14 +922,7 @@ const Game: React.FC = () => {
             )}
             <div className={styles.hintSection}>
               <HintSystem
-                hints={generateHints(
-                  currentLevelData.id,
-                  currentLevelData.minCommands <= 3
-                    ? 'basic'
-                    : currentLevelData.minCommands <= 6
-                      ? 'loop'
-                      : 'collect',
-                )}
+                hints={generateHints(currentLevelData.id, getHintDifficulty(currentLevelData))}
                 levelHint={currentLevelData.hint}
                 onUseHint={() => statsStorage.incrementHintUsage()}
               />

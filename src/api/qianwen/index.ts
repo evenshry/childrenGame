@@ -36,13 +36,18 @@ const withRetry = async <T>(
 };
 
 const getErrorType = (error: Error): string | undefined => {
-  const msg = error.message.toLowerCase();
-  if (msg.includes('quota') || msg.includes('额度')) return 'quota_exceeded';
-  if (msg.includes('rate limit') || msg.includes('频率')) return 'rate_limit';
-  if (msg.includes('balance') || msg.includes('余额')) return 'insufficient_balance';
-  if (msg.includes('model not found') || msg.includes('模型不存在')) return 'model_not_found';
-  if (msg.includes('access denied') || msg.includes('权限')) return 'access_denied';
-  if (msg.includes('invalid api key') || msg.includes('密钥无效')) return 'invalid_api_key';
+  // 优先读服务端返回的 code/message，axios 通用 message 往往不含配额信息
+  const data = (error as AxiosError).response?.data as
+    | { code?: string; message?: string }
+    | undefined;
+  const code = (data?.code || '').toLowerCase();
+  const msg = `${data?.message || ''} ${error.message}`.toLowerCase();
+  if (code.includes('quota') || code.includes('allocation') || msg.includes('quota') || msg.includes('额度')) return 'quota_exceeded';
+  if (code.includes('throttling') || code.includes('ratelimit') || code.includes('limitrequests') || msg.includes('rate limit') || msg.includes('频率')) return 'rate_limit';
+  if (code.includes('balance') || msg.includes('balance') || msg.includes('余额')) return 'insufficient_balance';
+  if (code.includes('modelnotfound') || msg.includes('model not found') || msg.includes('模型不存在')) return 'model_not_found';
+  if (code.includes('accessdenied') || msg.includes('access denied') || msg.includes('权限')) return 'access_denied';
+  if (code.includes('invalidapikey') || msg.includes('invalid api key') || msg.includes('密钥无效')) return 'invalid_api_key';
   return undefined;
 };
 

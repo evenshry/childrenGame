@@ -74,6 +74,18 @@ export const containsCommand = (command: Command, id: string): boolean => {
   );
 };
 
+/** 指令树中是否存在某类型指令（含子树） */
+export const containsCommandType = (
+  commands: Command[],
+  type: Command['type'],
+): boolean =>
+  commands.some(
+    (command) =>
+      command.type === type ||
+      containsCommandType(command.children ?? [], type) ||
+      containsCommandType(command.elseChildren ?? [], type),
+  );
+
 export const findCommandLocation = (
   commands: Command[],
   id: string,

@@ -199,7 +199,7 @@ export const progressStorage = {
           : existing?.bestTime === undefined
             ? timeSpent
             : Math.min(timeSpent, existing.bestTime),
-      attempts: (existing?.attempts || 0) + 1,
+      attempts: existing?.attempts || 0,
     };
 
     const newLevels = { ...data.progress.levels, [levelId]: progress };
@@ -224,6 +224,7 @@ export const progressStorage = {
     const data = getGameData();
     const existing = data.progress.levels[levelId];
     const progress: LevelProgress = {
+      ...existing,
       levelId,
       completed: existing?.completed || false,
       stars: existing?.stars || 0,
@@ -460,3 +461,12 @@ export const settingsStorage = {
     return getGameData().settings;
   },
 };
+
+// 其它标签页写入存档时丢弃内存缓存，避免互相覆盖
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === STORAGE_KEYS.GAME_DATA) {
+      gameDataCache = null;
+    }
+  });
+}

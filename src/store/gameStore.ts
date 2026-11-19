@@ -74,8 +74,8 @@ export const useGameStore = create<GameState & GameActions>()(
       collectedStars: [],
       isDebugMode: false,
       isRunning: false,
-      history: [],
-      historyIndex: -1,
+      history: [{ commands: [] }],
+      historyIndex: 0,
       maxHistoryLength: 50,
 
       setRobot: (robot) => set({ robot }),
@@ -179,8 +179,8 @@ export const useGameStore = create<GameState & GameActions>()(
           robot: getRobotFromLevel(level),
           commands: [],
           collectedStars: [],
-          history: [],
-          historyIndex: -1,
+          history: [{ commands: [] }],
+          historyIndex: 0,
           isRunning: false,
         });
       },

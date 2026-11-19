@@ -37,7 +37,7 @@ export const levels: Level[] = [
       ],
       stars: [{ x: 3, y: 2, type: "star" }],
     },
-    minCommands: 4,
+    minCommands: 5,
     hint: "试着用前进和右转走到终点。",
   },
   {
@@ -58,7 +58,7 @@ export const levels: Level[] = [
         { x: 2, y: 1, type: "star" },
       ],
     },
-    minCommands: 6,
+    minCommands: 10,
     hint: "避开障碍物，找到通往终点的路。",
   },
   {
@@ -81,7 +81,7 @@ export const levels: Level[] = [
         { x: 4, y: 1, type: "star" },
       ],
     },
-    minCommands: 3,
+    minCommands: 15,
     hint: "使用循环指令可以让代码更简洁。",
   },
   {
@@ -115,94 +115,52 @@ export const levels: Level[] = [
         { x: 1, y: 6, type: "star" },
       ],
     },
-    minCommands: 25,
+    minCommands: 24,
     hint: "使用所有指令类型：前进、左转、右转、循环、如果、重复直到、等待、随机转向",
     demoProgram: [
-      // ====== 1. (0,0) -> (2,0) 收集星星 ======
-      { id: "s1_f1", type: "forward" },
-      { id: "s1_f2", type: "forward" },
-      { id: "s1_c", type: "collect" },
-      
-      // ====== 2. (2,0) -> (3,1) 收集星星 ======
-      { id: "s2_f1", type: "forward" },
-      { id: "s2_r", type: "right" },
-      { id: "s2_f2", type: "forward" },
-      { id: "s2_c", type: "collect" },
-      
-      // ====== 3. (3,1) -> (4,2) 收集星星 ======
-      { id: "s3_f1", type: "forward" },
-      { id: "s3_l", type: "left" },
-      { id: "s3_f2", type: "forward" },
-      { id: "s3_c", type: "collect" },
-      
-      // ====== 4. (4,2) -> (4,3) 收集星星 ======
-      { id: "s4_r", type: "right" },
-      { id: "s4_f", type: "forward" },
-      { id: "s4_c", type: "collect" },
-      
-      // ====== 5. (4,3) -> (5,5) 收集星星 ======
-      { id: "s5_f1", type: "forward" },
-      { id: "s5_r", type: "right" },
-      { id: "s5_f2", type: "forward" },
-      { id: "s5_l", type: "left" },
-      { id: "s5_f3", type: "forward" },
-      { id: "s5_c", type: "collect" },
-      
-      // ====== 6. (5,5) -> (5,8) -> (7,8) 收集星星 ======
-      { id: "s6_r", type: "right" },
-      { id: "s6_loop1", type: "loop", params: { times: 3 }, children: [
-        { id: "s6_f1", type: "forward" },
-      ]},
-      { id: "s6_l", type: "left" },
-      { id: "s6_loop2", type: "loop", params: { times: 2 }, children: [
-        { id: "s6_f2", type: "forward" },
-      ]},
-      { id: "s6_c", type: "collect" },
-      
-      // ====== 7. (7,8) -> (6,7) 收集星星 ======
-      { id: "s7_l", type: "left" },
-      { id: "s7_f1", type: "forward" },
-      { id: "s7_r", type: "right" },
-      { id: "s7_f2", type: "forward" },
-      { id: "s7_c", type: "collect" },
-      
-      // ====== 8. (6,7) -> (1,7) -> (1,6) 收集星星 ======
-      { id: "s8_l", type: "left" },
-      { id: "s8_loop", type: "loop", params: { times: 5 }, children: [
-        { id: "s8_f1", type: "forward" },
-      ]},
-      { id: "s8_l2", type: "left" },
-      { id: "s8_f2", type: "forward" },
-      { id: "s8_c", type: "collect" },
-      
-      // ====== 9. (1,6) -> (1,1) -> (8,1) 收集星星 ======
-      { id: "s9_r", type: "right" },
-      { id: "s9_loop1", type: "loop", params: { times: 5 }, children: [
-        { id: "s9_f1", type: "forward" },
-      ]},
-      { id: "s9_r2", type: "right" },
-      { id: "s9_loop2", type: "loop", params: { times: 7 }, children: [
-        { id: "s9_f2", type: "forward" },
-      ]},
-      { id: "s9_c", type: "collect" },
-      
-      // ====== 10. (8,1) -> (9,9) 到达终点 ======
-      { id: "s10_r", type: "right" },
-      { id: "s10_f1", type: "forward" },
-      { id: "s10_r2", type: "right" },
-      { id: "s10_loop", type: "loop", params: { times: 8 }, children: [
-        { id: "s10_f2", type: "forward" },
-      ]},
-      
-      // ====== 复杂指令演示 ======
-      { id: "demo_if", type: "if", params: { condition: "hasStar" }, children: [
-        { id: "demo_collect", type: "collect" },
-      ]},
-      { id: "demo_wait", type: "wait", params: { seconds: 1 } },
-      { id: "demo_repeat", type: "repeatUntil", params: { condition: "nearGoal" }, children: [
-        { id: "demo_f", type: "forward" },
-      ]},
-      { id: "demo_rand", type: "randomTurn" },
+      // (0,0)->(3,0) 收 (2,0)
+      { id: "d1", type: "loop", params: { times: 3 }, children: [{ id: "d1f", type: "forward" }] },
+      { id: "d2", type: "right" },
+      // (3,0)->(3,1) 收 (3,1)，演示 collect
+      { id: "d3", type: "forward" },
+      { id: "d4", type: "collect" },
+      { id: "d5", type: "left" },
+      // (3,1)->(8,1) 收 (8,1)
+      { id: "d6", type: "loop", params: { times: 5 }, children: [{ id: "d6f", type: "forward" }] },
+      { id: "d7", type: "right" },
+      { id: "d8", type: "right" },
+      // (8,1)->(4,1)
+      { id: "d9", type: "loop", params: { times: 4 }, children: [{ id: "d9f", type: "forward" }] },
+      { id: "d10", type: "left" },
+      // (4,1)->(4,6) 收 (4,2)(4,3)
+      { id: "d11", type: "loop", params: { times: 5 }, children: [{ id: "d11f", type: "forward" }] },
+      { id: "d12", type: "right" },
+      // (4,6)->(1,6) 收 (1,6)
+      { id: "d13", type: "loop", params: { times: 3 }, children: [{ id: "d13f", type: "forward" }] },
+      { id: "d14", type: "right" },
+      { id: "d15", type: "forward" },
+      { id: "d16", type: "right" },
+      // (1,5)->(5,5) 收 (5,5)
+      { id: "d17", type: "loop", params: { times: 4 }, children: [{ id: "d17f", type: "forward" }] },
+      // 演示 if：已收集星星则再执行一次 collect
+      { id: "d18", type: "if", params: { condition: "hasStar" }, children: [{ id: "d18c", type: "collect" }] },
+      { id: "d19", type: "right" },
+      // (5,5)->(5,7)
+      { id: "d20", type: "loop", params: { times: 2 }, children: [{ id: "d20f", type: "forward" }] },
+      { id: "d21", type: "left" },
+      // (5,7)->(7,7) 收 (6,7)
+      { id: "d22", type: "loop", params: { times: 2 }, children: [{ id: "d22f", type: "forward" }] },
+      // 演示 wait
+      { id: "d23", type: "wait", params: { seconds: 1 } },
+      { id: "d24", type: "right" },
+      // (7,7)->(7,9) 收 (7,8)
+      { id: "d25", type: "loop", params: { times: 2 }, children: [{ id: "d25f", type: "forward" }] },
+      { id: "d26", type: "left" },
+      // 演示 repeatUntil：靠近终点前持续前进，再补一步到终点
+      { id: "d27", type: "repeatUntil", params: { condition: "nearGoal" }, children: [{ id: "d27f", type: "forward" }] },
+      { id: "d28", type: "forward" },
+      // 演示 randomTurn：已在终点，只改变朝向不影响通关
+      { id: "d29", type: "randomTurn" },
     ],
   },
 ];

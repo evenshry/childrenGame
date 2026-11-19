@@ -33,9 +33,7 @@ class MinHeap<T extends { f: number }> {
   }
   private down(i: number) {
     const n = this.items.length;
-    let changed = true;
-    while (changed) {
-      changed = false;
+    for (;;) {
       let smallest = i;
       const left = i * 2 + 1;
       const right = i * 2 + 2;
@@ -52,8 +50,8 @@ interface PathNode {
   x: number;
   y: number;
   dir: 'up' | 'down' | 'left' | 'right';
-  commands: Command[];
-  collectedStars: Set<string>;
+  parent: PathNode | null;
+  edge: Command[];
   remainingStars: Set<string>;
   g: number;
   h: number;
@@ -95,10 +93,39 @@ const getTurnCommands = (fromDir: string, toDir: string): Command[] => {
   return cmds;
 };
 
+const parseStarKey = (key: string): [number, number] => {
+  const [x, y] = key.split(',');
+  return [Number(x), Number(y)];
+};
+
 const getStateKey = (n: PathNode): string => {
-  // 对剩余星星排序，避免每次 new Set().sort()
   const remaining = Array.from(n.remainingStars).sort();
   return `${n.x},${n.y},${n.dir}|${remaining.join(',')}`;
+};
+
+/** 把连续的 forward 合并为 loop，减少顶层指令数（语义不变） */
+export const compressCommands = (commands: Command[]): Command[] => {
+  const out: Command[] = [];
+  let i = 0;
+  while (i < commands.length) {
+    if (commands[i].type !== 'forward') {
+      out.push(commands[i]);
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j < commands.length && commands[j].type === 'forward') j++;
+    const run = j - i;
+    if (run >= 2) {
+      out.push(
+        createCommand('loop', { times: run }, [createCommand('forward')]),
+      );
+    } else {
+      out.push(commands[i]);
+    }
+    i = j;
+  }
+  return out;
 };
 
 export const findOptimalPath = (
@@ -110,21 +137,50 @@ export const findOptimalPath = (
   const goal = map.cells.find((c) => c.type === 'goal');
   if (!goal) return [];
 
-  const allStarsSet = new Set(map.stars.map((s) => `${s.x},${s.y}`));
+  const starKeys = map.stars.map((s) => `${s.x},${s.y}`);
+  const starCoords = new Map(starKeys.map((key) => [key, parseStarKey(key)]));
+
+  // 可采纳启发式：到终点的曼哈顿距离 + 绕路收某一颗星的最大额外代价
+  // 可采纳启发式：到终点的曼哈顿距离 + 绕路收某一颗星的最大额外代价
+  const heuristic = (x: number, y: number, remaining: Set<string>): number => {
+    const toGoal = manhattan(x, y, goal.x, goal.y);
+    let extra = 0;
+    for (const key of remaining) {
+      const [sx, sy] = starCoords.get(key)!;
+      const detour =
+        manhattan(x, y, sx, sy) + manhattan(sx, sy, goal.x, goal.y) - toGoal;
+      if (detour > extra) extra = detour;
+    }
+    return toGoal + extra;
+  };
+
+  const reconstruct = (node: PathNode): Command[] => {
+    const edges: Command[][] = [];
+    let current: PathNode | null = node;
+    while (current && current.edge.length > 0) {
+      edges.push(current.edge);
+      current = current.parent;
+    }
+    edges.reverse();
+    return edges.flat();
+  };
 
   const heap = new MinHeap<PathNode>();
-  const closed = new Set<string>();
+  // 启发式可采纳但不一致，需允许以更小 g 重开已展开状态，才能保证最优
+  const bestG = new Map<string, number>();
+  const processed = new Set<string>();
 
-  const initialRemaining = new Set(allStarsSet);
-  const initH =
-    manhattan(startX, startY, goal.x, goal.y) + initialRemaining.size * 2;
+  const initialRemaining = new Set(starKeys);
+  const initH = heuristic(startX, startY, initialRemaining);
+  const startKey = `${startX},${startY},${startDir}|${Array.from(initialRemaining).sort().join(',')}`;
+  bestG.set(startKey, 0);
 
   heap.push({
     x: startX,
     y: startY,
     dir: startDir,
-    commands: [],
-    collectedStars: new Set<string>(),
+    parent: null,
+    edge: [],
     remainingStars: initialRemaining,
     g: 0,
     h: initH,
@@ -140,12 +196,12 @@ export const findOptimalPath = (
     explored++;
 
     if (current.x === goal.x && current.y === goal.y && current.remainingStars.size === 0) {
-      return current.commands;
+      return compressCommands(reconstruct(current));
     }
 
     const key = getStateKey(current);
-    if (closed.has(key)) continue;
-    closed.add(key);
+    if (processed.has(key)) continue;
+    processed.add(key);
 
     for (const { dir, dx, dy } of DIRS) {
       const nx = current.x + dx;
@@ -153,29 +209,26 @@ export const findOptimalPath = (
       if (!isValidPosition(nx, ny, map)) continue;
 
       const turnCmds = getTurnCommands(current.dir, dir);
-      const newCollected = new Set(current.collectedStars);
       const newRemaining = new Set(current.remainingStars);
+      // forward 本身会自动收星，无需额外 collect 指令
+      newRemaining.delete(`${nx},${ny}`);
 
-      const starKey = `${nx},${ny}`;
-      let extraCmds = [...turnCmds, createCommand('forward')];
-      if (allStarsSet.has(starKey) && !newCollected.has(starKey)) {
-        newCollected.add(starKey);
-        newRemaining.delete(starKey);
-        extraCmds.push(createCommand('collect'));
-      }
-
-      const g = current.g + extraCmds.length;
-      const h = manhattan(nx, ny, goal.x, goal.y) + newRemaining.size * 2;
+      const edge = [...turnCmds, createCommand('forward')];
+      const g = current.g + edge.length;
+      const h = heuristic(nx, ny, newRemaining);
 
       const stateKey = `${nx},${ny},${dir}|${Array.from(newRemaining).sort().join(',')}`;
-      if (closed.has(stateKey)) continue;
+      const known = bestG.get(stateKey);
+      if (known !== undefined && known <= g) continue;
+      bestG.set(stateKey, g);
+      processed.delete(stateKey);
 
       heap.push({
         x: nx,
         y: ny,
         dir,
-        commands: [...current.commands, ...extraCmds],
-        collectedStars: newCollected,
+        parent: current,
+        edge,
         remainingStars: newRemaining,
         g,
         h,
